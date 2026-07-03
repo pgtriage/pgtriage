@@ -1,12 +1,12 @@
 """Tests for deterministic pattern detection analyzers."""
 
-from pgaudit.analyzers.patterns import (
+from pgtriage.analyzers.patterns import (
     analyze_dead_tuples,
     analyze_sequential_scans,
     analyze_table_bloat,
     analyze_vacuum_staleness,
 )
-from pgaudit.models import Category, Severity
+from pgtriage.models import Category, Severity
 
 
 class TestAnalyzeDeadTuples:

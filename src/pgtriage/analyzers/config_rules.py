@@ -1,6 +1,6 @@
 """Configuration recommendation rules."""
 
-from pgaudit.models import Category, Finding, Severity
+from pgtriage.models import Category, Finding, Severity
 
 
 def _get_setting(settings: list[dict], name: str) -> str | None:

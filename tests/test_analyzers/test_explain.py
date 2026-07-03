@@ -1,7 +1,7 @@
 """Tests for EXPLAIN ANALYZE plan detection."""
 
-from pgaudit.analyzers.explain import detect_plan_issues
-from pgaudit.models import Category, Severity
+from pgtriage.analyzers.explain import detect_plan_issues
+from pgtriage.models import Category, Severity
 
 
 class TestDetectPlanIssues:

@@ -5,29 +5,29 @@ import os
 
 from mcp.server.fastmcp import FastMCP
 
-from pgaudit.analyzers.config_rules import analyze_config
-from pgaudit.analyzers.explain import detect_plan_issues, run_explain_analyze
-from pgaudit.analyzers.patterns import (
+from pgtriage.analyzers.config_rules import analyze_config
+from pgtriage.analyzers.explain import detect_plan_issues, run_explain_analyze
+from pgtriage.analyzers.patterns import (
     analyze_dead_tuples,
     analyze_sequential_scans,
     analyze_table_bloat,
     analyze_vacuum_staleness,
 )
-from pgaudit.collectors.config import collect_config_settings, collect_connection_stats
-from pgaudit.collectors.index_health import (
+from pgtriage.collectors.config import collect_config_settings, collect_connection_stats
+from pgtriage.collectors.index_health import (
     collect_duplicate_indexes,
     collect_tables_needing_indexes,
     collect_unused_indexes,
 )
-from pgaudit.collectors.slow_queries import (
+from pgtriage.collectors.slow_queries import (
     collect_n_plus_one_candidates,
     collect_slow_queries,
     is_pg_stat_statements_available,
     is_pg_stat_statements_loaded,
 )
-from pgaudit.collectors.table_health import collect_table_sizes, collect_table_stats
-from pgaudit.connection import ConnectionManager
-from pgaudit.models import AuditResult, Category, Finding, Severity
+from pgtriage.collectors.table_health import collect_table_sizes, collect_table_stats
+from pgtriage.connection import ConnectionManager
+from pgtriage.models import AuditResult, Category, Finding, Severity
 
 
 @dataclass
@@ -52,7 +52,7 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 
 
 mcp = FastMCP(
-    "pgaudit",
+    "pgtriage",
     lifespan=app_lifespan,
     instructions=(
         "PostgreSQL performance auditing server. "
@@ -350,7 +350,7 @@ async def full_audit(
     return result_data
 
 
-@mcp.resource("pgaudit://status")
+@mcp.resource("pgtriage://status")
 async def get_status() -> str:
     """Connection status, database version, loaded extensions."""
     ctx = mcp.get_context()
@@ -371,7 +371,7 @@ async def get_status() -> str:
     )
 
 
-@mcp.resource("pgaudit://tables")
+@mcp.resource("pgtriage://tables")
 async def get_tables() -> str:
     """List all tables with sizes and approximate row counts."""
     ctx = mcp.get_context()

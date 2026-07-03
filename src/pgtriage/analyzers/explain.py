@@ -2,8 +2,8 @@
 
 import re
 
-from pgaudit.connection import ConnectionManager
-from pgaudit.models import Category, Finding, Severity
+from pgtriage.connection import ConnectionManager
+from pgtriage.models import Category, Finding, Severity
 
 SELECT_PATTERN = re.compile(r"^\s*SELECT\b", re.IGNORECASE)
 STACKED_QUERY_PATTERN = re.compile(r";\s*\S")

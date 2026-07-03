@@ -1,6 +1,6 @@
 """Collect PostgreSQL configuration and connection stats."""
 
-from pgaudit.connection import ConnectionManager
+from pgtriage.connection import ConnectionManager
 
 CONFIG_SETTINGS_QUERY = """
 SELECT name, setting, unit, short_desc, context, boot_val, reset_val

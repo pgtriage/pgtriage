@@ -1,7 +1,7 @@
 """Tests for configuration rule analysis."""
 
-from pgaudit.analyzers.config_rules import analyze_config
-from pgaudit.models import Category, Severity
+from pgtriage.analyzers.config_rules import analyze_config
+from pgtriage.models import Category, Severity
 
 
 def _make_settings(**overrides):

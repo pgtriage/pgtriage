@@ -1,6 +1,6 @@
 """Collect index health metrics from PostgreSQL system views."""
 
-from pgaudit.connection import ConnectionManager
+from pgtriage.connection import ConnectionManager
 
 UNUSED_INDEXES_QUERY = """
 SELECT

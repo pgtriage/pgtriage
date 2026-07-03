@@ -1,6 +1,6 @@
 """Tests for data models."""
 
-from pgaudit.models import AuditResult, Category, Finding, Severity
+from pgtriage.models import AuditResult, Category, Finding, Severity
 
 
 class TestAuditResult:
