@@ -1,7 +1,67 @@
-"""Tests for EXPLAIN ANALYZE plan detection."""
+"""Tests for EXPLAIN ANALYZE safety validation and plan detection."""
 
-from pgtriage.analyzers.explain import detect_plan_issues
+from pgtriage.analyzers.explain import detect_plan_issues, is_safe_to_explain
 from pgtriage.models import Category, Severity
+
+
+class TestIsSafeToExplain:
+    def test_allows_simple_select(self):
+        assert is_safe_to_explain("SELECT * FROM users") is True
+
+    def test_allows_select_with_where(self):
+        assert is_safe_to_explain("SELECT id FROM accounts WHERE status = 'active'") is True
+
+    def test_allows_select_with_join(self):
+        assert is_safe_to_explain("SELECT a.id FROM accounts a JOIN users u ON a.user_id = u.id") is True
+
+    def test_allows_select_with_leading_whitespace(self):
+        assert is_safe_to_explain("  SELECT 1") is True
+
+    def test_rejects_insert(self):
+        assert is_safe_to_explain("INSERT INTO users (name) VALUES ('test')") is False
+
+    def test_rejects_update(self):
+        assert is_safe_to_explain("UPDATE users SET name = 'test'") is False
+
+    def test_rejects_delete(self):
+        assert is_safe_to_explain("DELETE FROM users") is False
+
+    def test_rejects_drop(self):
+        assert is_safe_to_explain("DROP TABLE users") is False
+
+    def test_rejects_truncate(self):
+        assert is_safe_to_explain("TRUNCATE users") is False
+
+    def test_rejects_create(self):
+        assert is_safe_to_explain("CREATE TABLE test (id int)") is False
+
+    def test_rejects_stacked_queries(self):
+        assert is_safe_to_explain("SELECT 1; DROP TABLE users") is False
+
+    def test_rejects_select_into(self):
+        assert is_safe_to_explain("SELECT * INTO new_table FROM users") is False
+
+    def test_rejects_select_for_update(self):
+        assert is_safe_to_explain("SELECT * FROM users FOR UPDATE") is False
+
+    def test_rejects_select_for_share(self):
+        assert is_safe_to_explain("SELECT * FROM users FOR SHARE") is False
+
+    def test_rejects_select_for_no_key_update(self):
+        assert is_safe_to_explain("SELECT * FROM users FOR NO KEY UPDATE") is False
+
+    def test_rejects_empty_string(self):
+        assert is_safe_to_explain("") is False
+
+    def test_rejects_whitespace_only(self):
+        assert is_safe_to_explain("   ") is False
+
+    def test_rejects_none_like(self):
+        assert is_safe_to_explain("") is False
+
+    def test_case_insensitive_rejection(self):
+        assert is_safe_to_explain("select * INTO backup from users") is False
+        assert is_safe_to_explain("SELECT * for UPDATE") is False
 
 
 class TestDetectPlanIssues:
@@ -14,7 +74,6 @@ class TestDetectPlanIssues:
             "Filter": "(value = 'abc'::text)",
         }}]
         findings = detect_plan_issues(plan, "SELECT * FROM identifiers WHERE value = 'abc'")
-        assert len(findings) >= 1
         seq_findings = [f for f in findings if f.category == Category.SEQUENTIAL_SCAN]
         assert len(seq_findings) == 1
         assert seq_findings[0].severity == Severity.HIGH
