@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from pgaudit.models import Category, Finding, Severity
+from pgtriage.models import Category, Finding, Severity
 
 DEAD_TUPLE_THRESHOLD_PCT = 10.0
 LARGE_TABLE_ROWS = 100_000

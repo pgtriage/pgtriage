@@ -1,6 +1,6 @@
 """Collect table health metrics from PostgreSQL system views."""
 
-from pgaudit.connection import ConnectionManager
+from pgtriage.connection import ConnectionManager
 
 TABLE_STATS_QUERY = """
 SELECT

@@ -1,4 +1,4 @@
-# pgaudit
+# pgtriage
 
 MCP server for PostgreSQL performance auditing. Connect it to Claude Code (or any MCP client) and say "audit my database" to get actionable performance findings with exact fixes.
 
@@ -8,13 +8,13 @@ MCP server for PostgreSQL performance auditing. Connect it to Claude Code (or an
 Claude Code (AI interpretation)
        |  MCP (stdio)
        v
-pgaudit (data collection + pattern detection)
+pgtriage (data collection + pattern detection)
        |  psycopg3 (read-only)
        v
 PostgreSQL database
 ```
 
-pgaudit connects to your PostgreSQL database and exposes performance auditing tools via the Model Context Protocol. It collects metrics from PostgreSQL system views, runs deterministic pattern detection, and returns structured findings. The MCP client provides the AI layer, interpreting results and explaining fixes in plain English.
+pgtriage connects to your PostgreSQL database and exposes performance auditing tools via the Model Context Protocol. It collects metrics from PostgreSQL system views, runs deterministic pattern detection, and returns structured findings. The MCP client provides the AI layer, interpreting results and explaining fixes in plain English.
 
 No API keys required. No AI costs. The intelligence comes from your MCP client.
 
@@ -35,7 +35,7 @@ No API keys required. No AI costs. The intelligence comes from your MCP client.
 ### Install
 
 ```bash
-pip install pgaudit
+pip install pgtriage
 ```
 
 ### Configure Claude Code
@@ -45,9 +45,9 @@ Add to your MCP settings (`.claude/settings.json` or project settings):
 ```json
 {
   "mcpServers": {
-    "pgaudit": {
+    "pgtriage": {
       "command": "python",
-      "args": ["-m", "pgaudit"],
+      "args": ["-m", "pgtriage"],
       "env": {
         "PGAUDIT_CONNECTION_STRING": "postgres://user:pass@localhost:5432/dbname"
       }
@@ -91,8 +91,8 @@ Review PostgreSQL settings (`shared_buffers`, `work_mem`, `autovacuum_vacuum_sca
 
 | Resource | Description |
 |---|---|
-| `pgaudit://status` | Connection status, PostgreSQL version, loaded extensions |
-| `pgaudit://tables` | All tables with sizes and approximate row counts |
+| `pgtriage://status` | Connection status, PostgreSQL version, loaded extensions |
+| `pgtriage://tables` | All tables with sizes and approximate row counts |
 
 ## Requirements
 
@@ -111,8 +111,8 @@ Review PostgreSQL settings (`shared_buffers`, `work_mem`, `autovacuum_vacuum_sca
 ## Development
 
 ```bash
-git clone https://github.com/manas-maheshwari/pgaudit.git
-cd pgaudit
+git clone https://github.com/manas-maheshwari/pgtriage.git
+cd pgtriage
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"

@@ -2,7 +2,7 @@
 
 import psycopg
 
-from pgaudit.connection import ConnectionManager
+from pgtriage.connection import ConnectionManager
 
 SLOW_QUERIES_QUERY = """
 SELECT
