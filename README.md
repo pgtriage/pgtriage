@@ -111,7 +111,7 @@ Review PostgreSQL settings (`shared_buffers`, `work_mem`, `autovacuum_vacuum_sca
 ## Development
 
 ```bash
-git clone https://github.com/manas-maheshwari/pgtriage.git
+git clone https://github.com/pgtriage/pgtriage.git
 cd pgtriage
 python3 -m venv .venv
 source .venv/bin/activate
