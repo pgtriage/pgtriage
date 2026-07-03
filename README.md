@@ -4,6 +4,8 @@ MCP server for PostgreSQL performance auditing. Connect it to Claude Code (or an
 
 > Not related to the [pgAudit](https://www.pgaudit.org/) logging extension. pgtriage does performance triage, not compliance logging.
 
+<!-- mcp-name: io.github.pgtriage/pgtriage -->
+
 ## How it works
 
 ```
