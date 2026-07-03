@@ -107,10 +107,16 @@ Review PostgreSQL settings (`shared_buffers`, `work_mem`, `autovacuum_vacuum_sca
 
 ## Safety
 
-- All connections enforce `SET default_transaction_read_only = true`
-- `EXPLAIN ANALYZE` only runs on `SELECT` queries (validated before execution)
+pgtriage never writes to your database. Three independent layers enforce this:
+
+1. **Session-level read-only:** `SET default_transaction_read_only = true` on every connection. PostgreSQL rejects any write attempt at the server level.
+2. **Query validation:** EXPLAIN ANALYZE only runs on SELECT statements. INSERT, UPDATE, DELETE, DROP, SELECT INTO, SELECT FOR UPDATE, and stacked queries are all rejected before execution.
+3. **Transaction rollback:** Every EXPLAIN ANALYZE runs inside an explicit BEGIN/ROLLBACK block. Even if layers 1 and 2 somehow fail, nothing is committed.
+
+Additionally:
+- A 10-second `statement_timeout` prevents slow queries from adding load during analysis
 - Connection strings are never exposed in tool outputs
-- Single read-only connection, no write operations
+- All database access is single-connection, no pooling
 
 ## Development
 
