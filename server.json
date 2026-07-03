@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.pgtriage/pgtriage",
+  "title": "pgtriage",
+  "description": "MCP server for PostgreSQL performance auditing. Say 'audit my database' to get actionable findings with exact SQL fixes.",
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "pgtriage",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
