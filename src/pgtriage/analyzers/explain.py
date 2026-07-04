@@ -13,7 +13,7 @@ import psycopg
 from pgtriage.connection import ConnectionManager
 from pgtriage.models import Category, Finding, Severity
 
-SELECT_PATTERN = re.compile(r"^\s*SELECT\b", re.IGNORECASE)
+SAFE_START_PATTERN = re.compile(r"^\s*SELECT\b", re.IGNORECASE)
 DANGEROUS_PATTERNS = re.compile(
     r";\s*\S"  # stacked queries
     r"|INTO\s+\w"  # SELECT INTO
@@ -22,17 +22,38 @@ DANGEROUS_PATTERNS = re.compile(
     r"|FOR\s+SHARE",
     re.IGNORECASE,
 )
+DML_ANYWHERE_PATTERN = re.compile(
+    r"\bINSERT\s+INTO\b"
+    r"|\bUPDATE\s+\w+\s+SET\b"
+    r"|\bDELETE\s+FROM\b"
+    r"|\bTRUNCATE\b"
+    r"|\bDROP\b"
+    r"|\bALTER\b"
+    r"|\bCREATE\b",
+    re.IGNORECASE,
+)
 
 STATEMENT_TIMEOUT_MS = 10_000  # 10 seconds max per EXPLAIN ANALYZE
 
 
 def is_safe_to_explain(query: str) -> bool:
-    """Check if a query is safe to run through EXPLAIN ANALYZE."""
+    """Check if a query is safe to run through EXPLAIN ANALYZE.
+
+    Validation rules:
+      - Must start with SELECT (rejects WITH/CTE, INSERT, UPDATE, DELETE, etc.)
+      - Must not contain DML keywords anywhere (catches subquery tricks)
+      - Must not contain SELECT INTO, FOR UPDATE/SHARE, stacked queries
+
+    Note: volatile functions (SELECT write_function()) pass string validation
+    but are caught by Layer 1 (read-only session) and Layer 3 (rollback).
+    """
     if not query or not query.strip():
         return False
-    if not SELECT_PATTERN.match(query):
+    if not SAFE_START_PATTERN.match(query):
         return False
     if DANGEROUS_PATTERNS.search(query):
+        return False
+    if DML_ANYWHERE_PATTERN.search(query):
         return False
     return True
 
