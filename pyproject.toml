@@ -38,3 +38,8 @@ dev = [
     "pytest-asyncio>=0.24",
     "ruff>=0.14",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: requires a running PostgreSQL (set PGTRIAGE_CONNECTION_STRING)",
+]

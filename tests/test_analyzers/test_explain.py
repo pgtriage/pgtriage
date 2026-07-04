@@ -63,6 +63,49 @@ class TestIsSafeToExplain:
         assert is_safe_to_explain("select * INTO backup from users") is False
         assert is_safe_to_explain("SELECT * for UPDATE") is False
 
+    # CTE write smuggling — the sharpest edge case
+    def test_rejects_cte_with_delete(self):
+        assert is_safe_to_explain(
+            "WITH x AS (DELETE FROM users RETURNING *) SELECT * FROM x"
+        ) is False
+
+    def test_rejects_cte_with_insert(self):
+        assert is_safe_to_explain(
+            "WITH x AS (INSERT INTO logs (msg) VALUES ('hi') RETURNING *) SELECT * FROM x"
+        ) is False
+
+    def test_rejects_cte_with_update(self):
+        assert is_safe_to_explain(
+            "WITH x AS (UPDATE users SET active = false RETURNING *) SELECT * FROM x"
+        ) is False
+
+    # DML hidden in subqueries or comments
+    def test_rejects_delete_in_subquery_text(self):
+        assert is_safe_to_explain(
+            "SELECT * FROM (DELETE FROM users RETURNING *) x"
+        ) is False
+
+    def test_rejects_truncate_anywhere(self):
+        assert is_safe_to_explain(
+            "SELECT 1; TRUNCATE users"
+        ) is False
+
+    def test_rejects_alter_anywhere(self):
+        assert is_safe_to_explain(
+            "SELECT * FROM users WHERE name = 'ALTER TABLE test'"
+        ) is False
+
+    # Safe CTEs (read-only) should be allowed
+    def test_allows_read_only_cte(self):
+        assert is_safe_to_explain(
+            "SELECT * FROM users WHERE id IN (SELECT id FROM accounts)"
+        ) is True
+
+    def test_allows_select_with_subquery(self):
+        assert is_safe_to_explain(
+            "SELECT u.*, (SELECT count(*) FROM orders o WHERE o.user_id = u.id) FROM users u"
+        ) is True
+
 
 class TestDetectPlanIssues:
     def test_detects_seq_scan_on_large_table(self):
