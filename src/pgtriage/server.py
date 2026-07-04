@@ -305,9 +305,6 @@ async def full_audit(
     """Run a comprehensive performance audit: table health,
     slow queries, index health, and configuration review.
     Returns a unified report with all findings sorted by severity."""
-    ctx = mcp.get_context()
-    db = ctx.request_context.lifespan_context.db
-
     all_findings = []
     sections = {}
 

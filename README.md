@@ -1,5 +1,10 @@
 # pgtriage
 
+[![CI](https://github.com/pgtriage/pgtriage/actions/workflows/ci.yml/badge.svg)](https://github.com/pgtriage/pgtriage/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/pgtriage)](https://pypi.org/project/pgtriage/)
+[![Python](https://img.shields.io/pypi/pyversions/pgtriage)](https://pypi.org/project/pgtriage/)
+[![License](https://img.shields.io/github/license/pgtriage/pgtriage)](LICENSE)
+
 MCP server for PostgreSQL performance auditing. Connect it to Claude Code (or any MCP client) and say "audit my database" to get actionable performance findings with exact fixes.
 
 > Not related to the [pgAudit](https://www.pgaudit.org/) logging extension. pgtriage does performance triage, not compliance logging.
