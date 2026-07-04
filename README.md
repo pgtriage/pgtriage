@@ -6,10 +6,14 @@ MCP server for PostgreSQL performance auditing. Connect it to Claude Code (or an
 
 <!-- mcp-name: io.github.pgtriage/pgtriage -->
 
+## Why I built this
+
+Built after diagnosing implicit type casts and missing indexes on multi-million-row tables in production fintech systems. The fixes were simple (one `CREATE INDEX CONCURRENTLY` statement each), but finding them required reading query plans most engineers never look at. pgtriage automates that diagnostic process and lets any AI client explain the results.
+
 ## How it works
 
 ```
-Claude Code (AI interpretation)
+Any MCP Client (Claude Code / Cursor / Windsurf / VS Code)
        |  MCP (stdio)
        v
 pgtriage (data collection + pattern detection)
@@ -20,7 +24,35 @@ PostgreSQL database
 
 pgtriage connects to your PostgreSQL database and exposes performance auditing tools via the Model Context Protocol. It collects metrics from PostgreSQL system views, runs deterministic pattern detection, and returns structured findings. The MCP client provides the AI layer, interpreting results and explaining fixes in plain English.
 
-No API keys required. No AI costs. The intelligence comes from your MCP client.
+No API keys required. No AI costs. No vendor lock-in. The intelligence comes from your MCP client.
+
+## Example output
+
+```json
+{
+  "severity": "high",
+  "category": "connection_pressure",
+  "detail": "Connection utilization at 104% (104/100). Approaching max_connections limit.",
+  "suggested_fix": "Consider using a connection pooler (PgBouncer) or increasing max_connections if RAM allows.",
+  "evidence": {
+    "total_connections": 104,
+    "max_connections": 100,
+    "utilization_pct": 104.0
+  }
+}
+```
+
+```json
+{
+  "severity": "medium",
+  "category": "duplicate_index",
+  "table": "account",
+  "detail": "Duplicate indexes on 'account': 'account_title_reverse_index' (16 kB) and 'account_group_reverse_index' (16 kB). Same column definition. One can be dropped.",
+  "suggested_fix": "DROP INDEX CONCURRENTLY account_group_reverse_index;"
+}
+```
+
+From a real audit: 118 tables scanned, 88 findings, prioritized by severity.
 
 ## What it finds
 
@@ -53,11 +85,20 @@ Add to your MCP settings (`.claude/settings.json` or project settings):
       "command": "python",
       "args": ["-m", "pgtriage"],
       "env": {
-        "PGAUDIT_CONNECTION_STRING": "postgres://user:pass@localhost:5432/dbname"
+        "PGTRIAGE_CONNECTION_STRING": "postgres://user:pass@localhost:5432/dbname"
       }
     }
   }
 }
+```
+
+**Recommended:** Use a dedicated read-only database role:
+
+```sql
+CREATE ROLE pgtriage_reader LOGIN PASSWORD 'secure_password';
+GRANT pg_read_all_stats TO pgtriage_reader;
+GRANT USAGE ON SCHEMA public TO pgtriage_reader;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO pgtriage_reader;
 ```
 
 ### Use
@@ -111,12 +152,20 @@ pgtriage never writes to your database. Three independent layers enforce this:
 
 1. **Session-level read-only:** `SET default_transaction_read_only = true` on every connection. PostgreSQL rejects any write attempt at the server level.
 2. **Query validation:** EXPLAIN ANALYZE only runs on SELECT statements. INSERT, UPDATE, DELETE, DROP, SELECT INTO, SELECT FOR UPDATE, and stacked queries are all rejected before execution.
-3. **Transaction rollback:** Every EXPLAIN ANALYZE runs inside an explicit BEGIN/ROLLBACK block. Even if layers 1 and 2 somehow fail, nothing is committed.
+3. **Transaction rollback:** Every EXPLAIN ANALYZE runs inside an explicit BEGIN/ROLLBACK block with a 10-second `statement_timeout`. Even if layers 1 and 2 somehow fail, nothing is committed and long-running queries are killed.
 
 Additionally:
-- A 10-second `statement_timeout` prevents slow queries from adding load during analysis
 - Connection strings are never exposed in tool outputs
 - All database access is single-connection, no pooling
+
+## Roadmap
+
+- [ ] Replication lag detection
+- [ ] Partitioning analysis and advice
+- [ ] HTML report export
+- [ ] Historical tracking (store audits, show trends)
+- [ ] CI/CD integration (audit-as-a-gate on migrations)
+- [ ] MySQL support
 
 ## Development
 

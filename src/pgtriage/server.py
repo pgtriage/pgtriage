@@ -37,10 +37,10 @@ class AppContext:
 
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
-    conn_string = os.environ.get("PGAUDIT_CONNECTION_STRING", "")
+    conn_string = os.environ.get("PGTRIAGE_CONNECTION_STRING", "")
     if not conn_string:
         raise RuntimeError(
-            "PGAUDIT_CONNECTION_STRING environment variable is required. "
+            "PGTRIAGE_CONNECTION_STRING environment variable is required. "
             "Example: postgres://user:pass@localhost:5432/dbname"
         )
 
