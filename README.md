@@ -163,15 +163,6 @@ Additionally:
 - Connection strings are never exposed in tool outputs
 - All database access is single-connection, no pooling
 
-## Roadmap
-
-- [ ] Replication lag detection
-- [ ] Partitioning analysis and advice
-- [ ] HTML report export
-- [ ] Historical tracking (store audits, show trends)
-- [ ] CI/CD integration (audit-as-a-gate on migrations)
-- [ ] MySQL support
-
 ## Development
 
 ```bash
