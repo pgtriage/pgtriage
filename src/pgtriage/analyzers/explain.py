@@ -1,6 +1,6 @@
 """EXPLAIN ANALYZE runner and execution plan analyzer.
 
-Safety model (three layers, all must fail for a write to occur):
+Safety model (three independent layers protect transactional database state):
   1. Session: SET default_transaction_read_only = true (connection.py)
   2. Validation: only SELECT statements are allowed (this module)
   3. Execution: wrapped in BEGIN/ROLLBACK with statement_timeout (this module)
@@ -36,6 +36,118 @@ DML_ANYWHERE_PATTERN = re.compile(
 STATEMENT_TIMEOUT_MS = 10_000  # 10 seconds max per EXPLAIN ANALYZE
 
 
+def _mask_sql_literals_and_comments(query: str) -> str | None:
+    """Blank SQL literals, quoted identifiers, and comments for keyword scans.
+
+    The returned string preserves length and newlines so validation can inspect
+    SQL structure without treating harmless text inside a literal or comment as
+    executable SQL. Malformed or unterminated input fails closed with ``None``.
+    """
+    masked = list(query)
+    length = len(query)
+    i = 0
+
+    def blank(start: int, end: int) -> None:
+        for pos in range(start, end):
+            if masked[pos] not in ("\n", "\r"):
+                masked[pos] = " "
+
+    while i < length:
+        if query.startswith("--", i):
+            end = query.find("\n", i + 2)
+            if end == -1:
+                end = length
+            blank(i, end)
+            i = end
+            continue
+
+        if query.startswith("/*", i):
+            start = i
+            i += 2
+            depth = 1
+            while i < length and depth:
+                if query.startswith("/*", i):
+                    depth += 1
+                    i += 2
+                elif query.startswith("*/", i):
+                    depth -= 1
+                    i += 2
+                else:
+                    i += 1
+            if depth:
+                return None
+            blank(start, i)
+            continue
+
+        if query[i] == "'":
+            start = i
+            prefix_position = i - 1
+            backslash_escapes = (
+                prefix_position >= 0
+                and query[prefix_position] in ("e", "E")
+                and (
+                    prefix_position == 0
+                    or not (
+                        query[prefix_position - 1].isalnum()
+                        or query[prefix_position - 1] in ("_", "$")
+                    )
+                )
+            )
+            i += 1
+            while i < length:
+                if backslash_escapes and query[i] == "\\":
+                    i += 2
+                elif query[i] == "'":
+                    if i + 1 < length and query[i + 1] == "'":
+                        i += 2
+                    else:
+                        i += 1
+                        break
+                else:
+                    i += 1
+            else:
+                return None
+            blank(start, min(i, length))
+            continue
+
+        if query[i] == '"':
+            start = i
+            i += 1
+            while i < length:
+                if query[i] == '"':
+                    if i + 1 < length and query[i + 1] == '"':
+                        i += 2
+                    else:
+                        i += 1
+                        break
+                else:
+                    i += 1
+            else:
+                return None
+            blank(start, i)
+            continue
+
+        if query[i] == "$":
+            delimiter_match = re.match(
+                r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$",
+                query[i:],
+            )
+            if delimiter_match:
+                delimiter = delimiter_match.group(0)
+                start = i
+                content_start = i + len(delimiter)
+                end = query.find(delimiter, content_start)
+                if end == -1:
+                    return None
+                i = end + len(delimiter)
+                blank(start, i)
+                continue
+
+        i += 1
+
+    return "".join(masked)
+
+
 def is_safe_to_explain(query: str) -> bool:
     """Check if a query is safe to run through EXPLAIN ANALYZE.
 
@@ -44,16 +156,20 @@ def is_safe_to_explain(query: str) -> bool:
       - Must not contain DML keywords anywhere (catches subquery tricks)
       - Must not contain SELECT INTO, FOR UPDATE/SHARE, stacked queries
 
-    Note: volatile functions (SELECT write_function()) pass string validation
-    but are caught by Layer 1 (read-only session) and Layer 3 (rollback).
+    Note: volatile functions (SELECT write_function()) can pass lexical
+    validation. The dedicated database role must restrict function privileges;
+    rollback cannot undo non-transactional external side effects.
     """
     if not query or not query.strip():
         return False
-    if not SAFE_START_PATTERN.match(query):
+    masked_query = _mask_sql_literals_and_comments(query)
+    if masked_query is None:
         return False
-    if DANGEROUS_PATTERNS.search(query):
+    if not SAFE_START_PATTERN.match(masked_query):
         return False
-    return not DML_ANYWHERE_PATTERN.search(query)
+    if DANGEROUS_PATTERNS.search(masked_query):
+        return False
+    return not DML_ANYWHERE_PATTERN.search(masked_query)
 
 
 async def run_explain_analyze(
@@ -66,8 +182,7 @@ async def run_explain_analyze(
       - Refuses non-SELECT queries
       - Refuses SELECT INTO, SELECT FOR UPDATE, stacked queries
       - Sets statement_timeout to prevent long-running EXPLAIN
-      - Wraps in BEGIN/ROLLBACK so even if read-only is somehow bypassed,
-        no changes are committed
+      - Wraps in BEGIN/ROLLBACK so transactional changes are not committed
       - Connection already has default_transaction_read_only = true
 
     Returns the JSON plan or None if the query is not safe or fails.

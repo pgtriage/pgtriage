@@ -4,6 +4,14 @@ from pgtriage.models import AuditResult, Category, Finding, Severity
 
 
 class TestAuditResult:
+    def test_findings_are_not_safe_to_apply_by_default(self):
+        finding = Finding(
+            severity=Severity.INFO,
+            category=Category.CONFIG_ISSUE,
+            detail="review before changing production",
+        )
+        assert finding.safe_to_apply is False
+
     def test_from_findings_counts_severities(self):
         findings = [
             Finding(severity=Severity.CRITICAL, category=Category.DEAD_TUPLES, detail="crit"),

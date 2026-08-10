@@ -43,7 +43,7 @@ def analyze_dead_tuples(table_stats: list[dict]) -> list[Finding]:
                 f"-- or for severe cases: VACUUM FULL {t['table_name']}; "
                 f"(requires exclusive lock)"
             ),
-            safe_to_apply=True,
+            safe_to_apply=False,
             requires_downtime=False,
             evidence={
                 "dead_tuples": dead_count,

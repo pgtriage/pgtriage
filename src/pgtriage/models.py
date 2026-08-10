@@ -40,7 +40,7 @@ class Finding(BaseModel):
     detail: str
     estimated_impact: str | None = None
     suggested_fix: str | None = None
-    safe_to_apply: bool = True
+    safe_to_apply: bool = False
     requires_downtime: bool = False
     evidence: dict[str, Any] = Field(default_factory=dict)
 

@@ -79,7 +79,7 @@ class TestIsSafeToExplain:
             "WITH x AS (UPDATE users SET active = false RETURNING *) SELECT * FROM x"
         ) is False
 
-    # DML hidden in subqueries or comments
+    # DML hidden in executable SQL
     def test_rejects_delete_in_subquery_text(self):
         assert is_safe_to_explain(
             "SELECT * FROM (DELETE FROM users RETURNING *) x"
@@ -90,13 +90,50 @@ class TestIsSafeToExplain:
             "SELECT 1; TRUNCATE users"
         ) is False
 
-    def test_rejects_alter_anywhere(self):
+    def test_allows_dangerous_keywords_inside_string_literals(self):
         assert is_safe_to_explain(
             "SELECT * FROM users WHERE name = 'ALTER TABLE test'"
+        ) is True
+
+    def test_allows_semicolon_inside_string_literal(self):
+        assert is_safe_to_explain("SELECT 'hello; DROP TABLE users'") is True
+
+    def test_allows_doubled_quote_inside_string_literal(self):
+        assert is_safe_to_explain("SELECT 'it''s a DROP test'") is True
+
+    def test_allows_backslash_escape_inside_e_string(self):
+        assert is_safe_to_explain(
+            r"SELECT E'it\'s safe; DROP TABLE users'"
+        ) is True
+
+    def test_does_not_treat_backslash_as_escape_in_standard_string(self):
+        assert is_safe_to_explain(
+            r"SELECT 'safe\'; DROP TABLE users; SELECT 'x'"
         ) is False
 
-    # Safe CTEs (read-only) should be allowed
-    def test_allows_read_only_cte(self):
+    def test_allows_dangerous_keywords_inside_comments(self):
+        assert is_safe_to_explain(
+            "SELECT 1 /* DELETE FROM users; */"
+        ) is True
+
+    def test_allows_dangerous_keywords_inside_dollar_quoted_literal(self):
+        assert is_safe_to_explain(
+            "SELECT $body$UPDATE users SET active = false$body$"
+        ) is True
+
+    def test_allows_leading_comment_before_select(self):
+        assert is_safe_to_explain(
+            "/* read-only diagnostic */ SELECT 1"
+        ) is True
+
+    def test_rejects_unterminated_string_literal(self):
+        assert is_safe_to_explain("SELECT 'unterminated") is False
+
+    def test_rejects_unterminated_block_comment(self):
+        assert is_safe_to_explain("SELECT 1 /* unterminated") is False
+
+    # Read-only subqueries should be allowed
+    def test_allows_read_only_subquery(self):
         assert is_safe_to_explain(
             "SELECT * FROM users WHERE id IN (SELECT id FROM accounts)"
         ) is True

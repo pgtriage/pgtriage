@@ -17,6 +17,8 @@ class TestAnalyzeDeadTuples:
         assert findings[0].severity == Severity.MEDIUM
         assert findings[0].category == Category.DEAD_TUPLES
         assert findings[0].table == "orders"
+        assert findings[0].safe_to_apply is False
+        assert findings[0].requires_downtime is False
 
     def test_high_above_20_percent(self):
         stats = [{"table_name": "orders", "n_live_tup": 100_000, "n_dead_tup": 30_000, "dead_tuple_pct": 23.0, "autovacuum_count": 1}]

@@ -212,8 +212,12 @@ async def check_index_health(
                 f"Index '{idx['index_name']}' on '{idx['table_name']}' has 0 scans "
                 f"since last stats reset. Size: {idx['index_size']}."
             ),
-            suggested_fix=f"DROP INDEX CONCURRENTLY {idx['index_name']};",
-            safe_to_apply=True,
+            suggested_fix=(
+                "Review the index definition, constraints, statistics-reset time, "
+                "replica usage, and representative query plans before considering: "
+                f"DROP INDEX CONCURRENTLY {idx['index_name']};"
+            ),
+            safe_to_apply=False,
             evidence={
                 "index_definition": idx["index_definition"],
                 "index_size": idx["index_size"],

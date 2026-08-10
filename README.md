@@ -153,14 +153,15 @@ Review PostgreSQL settings (`shared_buffers`, `work_mem`, `autovacuum_vacuum_sca
 
 ## Safety
 
-pgtriage never writes to your database. Three independent layers enforce this:
+pgtriage is designed for read-only production use and does not issue write SQL. Three independent layers protect database state:
 
 1. **Session-level read-only:** `SET default_transaction_read_only = true` on every connection. PostgreSQL rejects any write attempt at the server level.
 2. **Query validation:** EXPLAIN ANALYZE only runs on SELECT statements. INSERT, UPDATE, DELETE, DROP, SELECT INTO, SELECT FOR UPDATE, and stacked queries are all rejected before execution.
-3. **Transaction rollback:** Every EXPLAIN ANALYZE runs inside an explicit BEGIN/ROLLBACK block with a 10-second `statement_timeout`. Even if layers 1 and 2 somehow fail, nothing is committed and long-running queries are killed.
+3. **Transaction rollback:** Every EXPLAIN ANALYZE runs inside an explicit BEGIN/ROLLBACK block with a 10-second `statement_timeout`. Transactional database changes are rolled back and long-running queries are canceled. Rollback cannot undo external side effects triggered by database extensions or functions, so the dedicated read-only role and session-level read-only enforcement remain essential.
 
 Additionally:
 - Connection strings are never exposed in tool outputs
+- Suggested fixes are advisory and are never executed by pgtriage; findings default to `safe_to_apply: false`
 - All database access is single-connection, no pooling
 
 ## Development
