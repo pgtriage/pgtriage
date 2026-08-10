@@ -1,6 +1,6 @@
 """Deterministic pattern detection on PostgreSQL metrics."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pgtriage.models import Category, Finding, Severity
 
@@ -101,7 +101,7 @@ def analyze_sequential_scans(table_stats: list[dict]) -> list[Finding]:
 
 def analyze_vacuum_staleness(table_stats: list[dict]) -> list[Finding]:
     findings = []
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     for t in table_stats:
         dead_count = t.get("n_dead_tup", 0)
@@ -124,7 +124,7 @@ def analyze_vacuum_staleness(table_stats: list[dict]) -> list[Finding]:
             continue
 
         if last_vacuum.tzinfo is None:
-            last_vacuum = last_vacuum.replace(tzinfo=timezone.utc)
+            last_vacuum = last_vacuum.replace(tzinfo=UTC)
 
         hours_since = (now - last_vacuum).total_seconds() / 3600
         if hours_since > VACUUM_STALE_HOURS and dead_count > 10_000:

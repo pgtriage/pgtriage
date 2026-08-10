@@ -34,10 +34,10 @@ jobs:
       PGPASSWORD: pgtriage
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -61,9 +61,42 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: pip install ruff
+      - run: pip install -e ".[dev]"
       - run: ruff check .
+
+  package-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Build distributions
+        run: |
+          pip install -e ".[dev]"
+          python -m build
+          twine check dist/*
+
+      - name: Install wheel in a clean virtual environment
+        run: |
+          python -m venv /tmp/pgtriage-smoke
+          /tmp/pgtriage-smoke/bin/pip install dist/*.whl
+          /tmp/pgtriage-smoke/bin/pip check
+          /tmp/pgtriage-smoke/bin/python -c "from mcp.server.fastmcp import FastMCP; import pgtriage.server"
+
+      - name: Verify installed CLI startup
+        env:
+          PGTRIAGE_CONNECTION_STRING: postgresql://pgtriage:pgtriage@localhost:5432/pgtriage_test
+        run: |
+          set +e
+          timeout 2s /tmp/pgtriage-smoke/bin/pgtriage < /dev/null
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
+            exit "$status"
+          fi

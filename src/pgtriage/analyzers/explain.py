@@ -53,9 +53,7 @@ def is_safe_to_explain(query: str) -> bool:
         return False
     if DANGEROUS_PATTERNS.search(query):
         return False
-    if DML_ANYWHERE_PATTERN.search(query):
-        return False
-    return True
+    return not DML_ANYWHERE_PATTERN.search(query)
 
 
 async def run_explain_analyze(
@@ -106,7 +104,6 @@ async def run_explain_analyze(
 
 class _RollbackSignal(Exception):
     """Raised inside a transaction block to force ROLLBACK."""
-    pass
 
 
 def detect_plan_issues(

@@ -1,7 +1,8 @@
+import os
+import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-import os
 
 from mcp.server.fastmcp import FastMCP
 
@@ -38,6 +39,15 @@ class AppContext:
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     conn_string = os.environ.get("PGTRIAGE_CONNECTION_STRING", "")
+    if not conn_string:
+        conn_string = os.environ.get("PGAUDIT_CONNECTION_STRING", "")
+        if conn_string:
+            print(
+                "WARNING: PGAUDIT_CONNECTION_STRING is deprecated, use "
+                "PGTRIAGE_CONNECTION_STRING instead. Support for the old name "
+                "will be removed in a future release.",
+                file=sys.stderr,
+            )
     if not conn_string:
         raise RuntimeError(
             "PGTRIAGE_CONNECTION_STRING environment variable is required. "

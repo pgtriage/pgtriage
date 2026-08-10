@@ -3,7 +3,7 @@
   "name": "io.github.pgtriage/pgtriage",
   "title": "pgtriage",
   "description": "MCP server for PostgreSQL performance auditing with actionable SQL fixes.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "packages": [
     {
       "registryType": "pypi",

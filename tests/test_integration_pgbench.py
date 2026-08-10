@@ -57,7 +57,7 @@ def sabotaged_db():
 
     try:
         parsed = psycopg.conninfo.conninfo_to_dict(DSN)
-    except Exception:
+    except psycopg.ProgrammingError:
         pytest.skip(f"Invalid connection string: {DSN}")
 
     host = parsed.get("host", "localhost")
@@ -73,6 +73,7 @@ def sabotaged_db():
         capture_output=True,
         text=True,
         env=env,
+        check=False,
     )
     if result.returncode != 0:
         pytest.skip(f"pgbench init failed: {result.stderr}")
@@ -99,6 +100,7 @@ def sabotaged_db():
         capture_output=True,
         text=True,
         env=env,
+        check=False,
     )
 
     yield DSN
