@@ -141,6 +141,16 @@ Find unused indexes (zero scans), duplicate indexes (same column definition), an
 ### `check_config`
 Review PostgreSQL settings (`shared_buffers`, `work_mem`, `autovacuum_vacuum_scale_factor`, `random_page_cost`, etc.) and flag suboptimal values. Checks connection utilization and long-running queries.
 
+### Agent runtime integration
+
+pgtriage publishes MCP safety annotations for every tool. All tools are marked
+read-only and non-destructive; tools that can run bounded `EXPLAIN ANALYZE` are
+deliberately not marked idempotent. Agent runtimes must still allowlist,
+authorize, and validate every call because MCP annotations are descriptive
+hints, not permissions. See
+[Agent Runtime Integration](docs/agent-runtime-integration.md) for the complete
+contract, schema-scoped audit behavior, and retry guidance.
+
 ## Resources
 
 | Resource | Description |

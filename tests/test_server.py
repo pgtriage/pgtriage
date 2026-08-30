@@ -58,6 +58,30 @@ async def test_lifespan_requires_connection_string(monkeypatch):
             pass
 
 
+@pytest.mark.asyncio
+async def test_mcp_tools_publish_accurate_safety_annotations():
+    tools = {tool.name: tool for tool in await server.mcp.list_tools()}
+
+    assert set(tools) == {
+        "check_table_health",
+        "analyze_slow_queries",
+        "check_index_health",
+        "check_config",
+        "full_audit",
+    }
+
+    for tool in tools.values():
+        assert tool.annotations is not None
+        assert tool.annotations.readOnlyHint is True
+        assert tool.annotations.destructiveHint is False
+
+    for name in ("check_table_health", "check_index_health", "check_config"):
+        assert tools[name].annotations.idempotentHint is True
+
+    for name in ("analyze_slow_queries", "full_audit"):
+        assert tools[name].annotations.idempotentHint is False
+
+
 def _context_with_db(db):
     return SimpleNamespace(
         request_context=SimpleNamespace(

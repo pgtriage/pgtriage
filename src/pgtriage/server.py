@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import psycopg
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from pgtriage.analyzers.config_rules import analyze_config
 from pgtriage.analyzers.explain import (
@@ -36,6 +37,17 @@ from pgtriage.collectors.slow_queries import (
 from pgtriage.collectors.table_health import collect_table_sizes, collect_table_stats
 from pgtriage.connection import ConnectionManager
 from pgtriage.models import AuditResult, Category, Finding, Severity
+
+READ_ONLY_IDEMPOTENT = ToolAnnotations(
+    readOnlyHint=True,
+    destructiveHint=False,
+    idempotentHint=True,
+)
+READ_ONLY_DIAGNOSTIC = ToolAnnotations(
+    readOnlyHint=True,
+    destructiveHint=False,
+    idempotentHint=False,
+)
 
 
 @dataclass
@@ -80,7 +92,7 @@ mcp = FastMCP(
 )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_IDEMPOTENT)
 async def check_table_health(
     table_name: str | None = None,
     schema_name: str | None = None,
@@ -107,7 +119,7 @@ async def check_table_health(
     return result.model_dump()
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_DIAGNOSTIC)
 async def analyze_slow_queries(
     limit: int = 10,
     min_calls: int = 5,
@@ -225,7 +237,7 @@ async def analyze_slow_queries(
     return result.model_dump()
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_IDEMPOTENT)
 async def check_index_health(
     schema_name: str | None = None,
 ) -> dict:
@@ -334,7 +346,7 @@ async def check_index_health(
     return result.model_dump()
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_IDEMPOTENT)
 async def check_config() -> dict:
     """Review PostgreSQL configuration settings and flag
     suboptimal values for shared_buffers, work_mem,
@@ -355,7 +367,7 @@ async def check_config() -> dict:
     return result_data
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_DIAGNOSTIC)
 async def full_audit(
     slow_query_limit: int = 10,
     schema_name: str | None = None,
