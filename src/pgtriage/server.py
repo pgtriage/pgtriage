@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
+import psycopg
 from mcp.server.fastmcp import FastMCP
 
 from pgtriage.analyzers.config_rules import analyze_config
@@ -17,6 +18,7 @@ from pgtriage.analyzers.patterns import (
 from pgtriage.collectors.config import collect_config_settings, collect_connection_stats
 from pgtriage.collectors.index_health import (
     collect_duplicate_indexes,
+    collect_index_metadata,
     collect_tables_needing_indexes,
     collect_unused_indexes,
 )
@@ -141,13 +143,23 @@ async def analyze_slow_queries(
         return AuditResult.from_findings([not_loaded]).model_dump()
 
     slow_queries = await collect_slow_queries(db, limit, min_calls)
+    try:
+        index_metadata = await collect_index_metadata(db)
+    except psycopg.Error:
+        # Catalog metadata enriches plan findings but must never make the
+        # existing slow-query audit unavailable on a restricted database role.
+        index_metadata = []
     findings = []
 
     for sq in slow_queries:
         query_text = sq.get("query", "")
         plan = await run_explain_analyze(db, query_text)
         if plan:
-            plan_findings = detect_plan_issues(plan, query_text)
+            plan_findings = detect_plan_issues(
+                plan,
+                query_text,
+                index_metadata=index_metadata,
+            )
             for f in plan_findings:
                 f.evidence["mean_exec_time_ms"] = sq.get("mean_exec_time_ms")
                 f.evidence["total_exec_time_ms"] = sq.get("total_exec_time_ms")
@@ -315,10 +327,16 @@ async def check_config() -> dict:
 @mcp.tool()
 async def full_audit(
     slow_query_limit: int = 10,
+    schema_name: str = "public",
 ) -> dict:
     """Run a comprehensive performance audit: table health,
     slow queries, index health, and configuration review.
-    Returns a unified report with all findings sorted by severity."""
+    Returns a unified report with all findings sorted by severity.
+
+    Table health and slow-query analysis cover all user schemas. The
+    schema_name argument scopes index-health analysis, which defaults to
+    PostgreSQL's conventional public schema.
+    """
     all_findings = []
     sections = {}
 
@@ -334,7 +352,7 @@ async def full_audit(
         Finding(**f) for f in query_result.get("findings", [])
     )
 
-    index_result = await check_index_health()
+    index_result = await check_index_health(schema_name=schema_name)
     sections["index_health"] = index_result
     all_findings.extend(
         Finding(**f) for f in index_result.get("findings", [])

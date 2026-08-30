@@ -1,5 +1,7 @@
 """Tests for EXPLAIN ANALYZE safety validation and plan detection."""
 
+import pytest
+
 from pgtriage.analyzers.explain import detect_plan_issues, is_safe_to_explain
 from pgtriage.models import Category, Severity
 
@@ -145,6 +147,28 @@ class TestIsSafeToExplain:
 
 
 class TestDetectPlanIssues:
+    @staticmethod
+    def _uuid_index_metadata(**overrides):
+        metadata = {
+            "schema_name": "public",
+            "table_name": "identifiers",
+            "column_name": "account_id",
+            "column_type": "uuid",
+            "index_position": 1,
+            "is_key_column": True,
+            "index_name": "idx_identifiers_account_id",
+            "index_method": "btree",
+            "index_definition": (
+                "CREATE INDEX idx_identifiers_account_id "
+                "ON public.identifiers USING btree (account_id)"
+            ),
+            "index_expression": None,
+            "index_predicate": None,
+            "table_live_rows": 2_200_000,
+        }
+        metadata.update(overrides)
+        return metadata
+
     def test_detects_seq_scan_on_large_table(self):
         plan = [{"Plan": {
             "Node Type": "Seq Scan",
@@ -204,3 +228,295 @@ class TestDetectPlanIssues:
     def test_handles_no_plan_key(self):
         findings = detect_plan_issues([{}])
         assert len(findings) == 0
+
+    def test_detects_cast_on_indexed_column_that_forces_large_seq_scan(self):
+        plan = [{"Plan": {
+            "Node Type": "Seq Scan",
+            "Schema": "public",
+            "Relation Name": "identifiers",
+            "Alias": "i",
+            "Actual Rows": 1,
+            "Rows Removed by Filter": 2_199_999,
+            "Actual Loops": 1,
+            "Plan Rows": 1,
+            "Filter": "((account_id)::text = 'abc'::text)",
+        }}]
+
+        findings = detect_plan_issues(
+            plan,
+            "SELECT * FROM identifiers WHERE account_id::text = 'abc'",
+            index_metadata=[self._uuid_index_metadata()],
+        )
+
+        mismatches = [f for f in findings if f.category == Category.TYPE_MISMATCH]
+        assert len(mismatches) == 1
+        finding = mismatches[0]
+        assert finding.severity == Severity.HIGH
+        assert finding.safe_to_apply is False
+        assert finding.evidence["column"] == "account_id"
+        assert finding.evidence["source_type"] == "uuid"
+        assert finding.evidence["cast_target_type"] == "text"
+        assert finding.evidence["rows_examined"] == 2_200_000
+        assert finding.evidence["index_names"] == ["idx_identifiers_account_id"]
+        assert "binding or casting the compared value as uuid" in finding.suggested_fix
+        assert not [f for f in findings if f.category == Category.SEQUENTIAL_SCAN]
+
+    def test_detects_cast_function_syntax_and_qualified_column(self):
+        plan = [{"Plan": {
+            "Node Type": "Seq Scan",
+            "Schema": "public",
+            "Relation Name": "identifiers",
+            "Alias": "i",
+            "Actual Rows": 2,
+            "Rows Removed by Filter": 149_998,
+            "Plan Rows": 2,
+            "Filter": "(CAST(i.account_id AS character varying) = 'abc'::varchar)",
+        }}]
+
+        findings = detect_plan_issues(
+            plan,
+            index_metadata=[self._uuid_index_metadata(table_live_rows=150_000)],
+        )
+
+        mismatches = [f for f in findings if f.category == Category.TYPE_MISMATCH]
+        assert len(mismatches) == 1
+        assert mismatches[0].severity == Severity.MEDIUM
+        assert mismatches[0].evidence["cast_target_type"] == "varchar"
+
+    def test_ignores_cast_on_parameter_instead_of_indexed_column(self):
+        plan = [{"Plan": {
+            "Node Type": "Seq Scan",
+            "Schema": "public",
+            "Relation Name": "identifiers",
+            "Actual Rows": 1,
+            "Rows Removed by Filter": 2_199_999,
+            "Plan Rows": 1,
+            "Filter": "(account_id = ($1)::uuid)",
+        }}]
+
+        findings = detect_plan_issues(
+            plan,
+            index_metadata=[self._uuid_index_metadata()],
+        )
+
+        assert not [f for f in findings if f.category == Category.TYPE_MISMATCH]
+        assert [f for f in findings if f.category == Category.SEQUENTIAL_SCAN]
+
+    def test_ignores_cast_on_unindexed_column(self):
+        plan = [{"Plan": {
+            "Node Type": "Seq Scan",
+            "Schema": "public",
+            "Relation Name": "identifiers",
+            "Actual Rows": 1,
+            "Rows Removed by Filter": 2_199_999,
+            "Plan Rows": 1,
+            "Filter": "((external_id)::text = 'abc'::text)",
+        }}]
+
+        findings = detect_plan_issues(
+            plan,
+            index_metadata=[self._uuid_index_metadata()],
+        )
+
+        assert not [f for f in findings if f.category == Category.TYPE_MISMATCH]
+
+    def test_ignores_same_type_cast(self):
+        plan = [{"Plan": {
+            "Node Type": "Seq Scan",
+            "Schema": "public",
+            "Relation Name": "identifiers",
+            "Actual Rows": 1,
+            "Rows Removed by Filter": 2_199_999,
+            "Plan Rows": 1,
+            "Filter": "((account_id)::uuid = '00000000-0000-0000-0000-000000000000'::uuid)",
+        }}]
+
+        findings = detect_plan_issues(
+            plan,
+            index_metadata=[self._uuid_index_metadata()],
+        )
+
+        assert not [f for f in findings if f.category == Category.TYPE_MISMATCH]
+
+    def test_ignores_cast_when_scan_is_small(self):
+        plan = [{"Plan": {
+            "Node Type": "Seq Scan",
+            "Schema": "public",
+            "Relation Name": "identifiers",
+            "Actual Rows": 1,
+            "Rows Removed by Filter": 999,
+            "Plan Rows": 1,
+            "Filter": "((account_id)::text = 'abc'::text)",
+        }}]
+
+        findings = detect_plan_issues(
+            plan,
+            index_metadata=[self._uuid_index_metadata(table_live_rows=1_000)],
+        )
+
+        assert not [f for f in findings if f.category == Category.TYPE_MISMATCH]
+
+    def test_ignores_cast_when_predicate_returns_large_share_of_table(self):
+        plan = [{"Plan": {
+            "Node Type": "Seq Scan",
+            "Schema": "public",
+            "Relation Name": "identifiers",
+            "Actual Rows": 1_100_000,
+            "Rows Removed by Filter": 1_100_000,
+            "Plan Rows": 1_100_000,
+            "Filter": "((account_id)::text <> '')",
+        }}]
+
+        findings = detect_plan_issues(
+            plan,
+            index_metadata=[self._uuid_index_metadata()],
+        )
+
+        assert not [f for f in findings if f.category == Category.TYPE_MISMATCH]
+        assert [f for f in findings if f.category == Category.SEQUENTIAL_SCAN]
+
+    def test_ignores_index_method_that_cannot_support_scalar_equality(self):
+        plan = [{"Plan": {
+            "Node Type": "Seq Scan",
+            "Schema": "public",
+            "Relation Name": "identifiers",
+            "Actual Rows": 1,
+            "Rows Removed by Filter": 2_199_999,
+            "Plan Rows": 1,
+            "Filter": "((account_id)::text = 'abc'::text)",
+        }}]
+
+        findings = detect_plan_issues(
+            plan,
+            index_metadata=[self._uuid_index_metadata(index_method="gin")],
+        )
+
+        assert not [f for f in findings if f.category == Category.TYPE_MISMATCH]
+
+    def test_normalizes_type_modifiers_before_comparing_types(self):
+        plan = [{"Plan": {
+            "Node Type": "Seq Scan",
+            "Schema": "public",
+            "Relation Name": "identifiers",
+            "Actual Rows": 1,
+            "Rows Removed by Filter": 2_199_999,
+            "Plan Rows": 1,
+            "Filter": "(CAST(account_id AS varchar(255)) = 'abc'::varchar)",
+        }}]
+
+        findings = detect_plan_issues(
+            plan,
+            index_metadata=[self._uuid_index_metadata()],
+        )
+
+        mismatches = [f for f in findings if f.category == Category.TYPE_MISMATCH]
+        assert len(mismatches) == 1
+        assert mismatches[0].evidence["cast_target_type"] == "varchar"
+
+    @pytest.mark.parametrize(
+        "metadata_override",
+        [
+            {"index_position": 2},
+            {"is_key_column": False},
+            {"index_predicate": "(active = true)"},
+        ],
+    )
+    def test_ignores_index_that_cannot_support_plain_lookup(self, metadata_override):
+        plan = [{"Plan": {
+            "Node Type": "Seq Scan",
+            "Schema": "public",
+            "Relation Name": "identifiers",
+            "Actual Rows": 1,
+            "Rows Removed by Filter": 2_199_999,
+            "Plan Rows": 1,
+            "Filter": "((account_id)::text = 'abc'::text)",
+        }}]
+
+        findings = detect_plan_issues(
+            plan,
+            index_metadata=[self._uuid_index_metadata(**metadata_override)],
+        )
+
+        assert not [f for f in findings if f.category == Category.TYPE_MISMATCH]
+
+    def test_uses_catalog_row_count_when_plan_has_no_runtime_counters(self):
+        plan = [{"Plan": {
+            "Node Type": "Seq Scan",
+            "Schema": "public",
+            "Relation Name": "identifiers",
+            "Plan Rows": 1,
+            "Filter": "((account_id)::text = 'abc'::text)",
+        }}]
+
+        findings = detect_plan_issues(
+            plan,
+            index_metadata=[self._uuid_index_metadata(table_live_rows=2_200_000)],
+        )
+
+        mismatches = [f for f in findings if f.category == Category.TYPE_MISMATCH]
+        assert len(mismatches) == 1
+        assert mismatches[0].evidence["rows_examined"] == 2_200_000
+
+    def test_ignores_cast_when_matching_expression_index_exists(self):
+        expression_index = self._uuid_index_metadata(
+            column_name=None,
+            column_type=None,
+            index_name="idx_identifiers_account_id_text",
+            index_definition=(
+                "CREATE INDEX idx_identifiers_account_id_text "
+                "ON public.identifiers USING btree (((account_id)::text))"
+            ),
+            index_expression="(account_id)::text",
+        )
+        plan = [{"Plan": {
+            "Node Type": "Seq Scan",
+            "Schema": "public",
+            "Relation Name": "identifiers",
+            "Actual Rows": 1,
+            "Rows Removed by Filter": 2_199_999,
+            "Plan Rows": 1,
+            "Filter": "((account_id)::text = 'abc'::text)",
+        }}]
+
+        findings = detect_plan_issues(
+            plan,
+            index_metadata=[self._uuid_index_metadata(), expression_index],
+        )
+
+        assert not [f for f in findings if f.category == Category.TYPE_MISMATCH]
+
+    def test_ignores_cast_qualified_for_different_relation(self):
+        plan = [{"Plan": {
+            "Node Type": "Seq Scan",
+            "Schema": "public",
+            "Relation Name": "identifiers",
+            "Alias": "i",
+            "Actual Rows": 1,
+            "Rows Removed by Filter": 2_199_999,
+            "Plan Rows": 1,
+            "Filter": "((other.account_id)::text = 'abc'::text)",
+        }}]
+
+        findings = detect_plan_issues(
+            plan,
+            index_metadata=[self._uuid_index_metadata()],
+        )
+
+        assert not [f for f in findings if f.category == Category.TYPE_MISMATCH]
+
+    def test_rows_removed_by_filter_drives_generic_seq_scan_detection(self):
+        plan = [{"Plan": {
+            "Node Type": "Seq Scan",
+            "Relation Name": "identifiers",
+            "Actual Rows": 1,
+            "Rows Removed by Filter": 200_000,
+            "Actual Loops": 2,
+            "Plan Rows": 1,
+            "Filter": "(value = 'abc'::text)",
+        }}]
+
+        findings = detect_plan_issues(plan)
+
+        seq_scan = [f for f in findings if f.category == Category.SEQUENTIAL_SCAN]
+        assert len(seq_scan) == 1
+        assert seq_scan[0].evidence["rows_examined"] == 400_002

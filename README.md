@@ -62,6 +62,8 @@ From a real audit: 118 tables scanned, 88 findings, prioritized by severity.
 ## What it finds
 
 - **Sequential scans on large tables** with missing index suggestions
+- **Type casts on indexed columns** that suppress index usage, verified against
+  PostgreSQL catalog metadata and the observed query plan
 - **Dead tuple buildup** and autovacuum health issues
 - **Unused and duplicate indexes** wasting disk and slowing writes
 - **N+1 query patterns** from pg_stat_statements analysis
@@ -129,7 +131,7 @@ Run a comprehensive performance audit covering table health, slow queries, index
 Analyze dead tuples, autovacuum stats, sequential scan ratios, and TOAST bloat. Optionally filter to a specific table.
 
 ### `analyze_slow_queries`
-Pull the slowest queries from `pg_stat_statements`, run `EXPLAIN ANALYZE` on each, and detect patterns like sequential scans, stale statistics, and N+1 queries.
+Pull the slowest queries from `pg_stat_statements`, inspect their execution plans, and detect patterns like indexed-column type casts, sequential scans, stale statistics, and N+1 queries. Literal queries use bounded `EXPLAIN ANALYZE`; normalized queries containing placeholders use a non-executing generic plan.
 
 ### `check_index_health`
 Find unused indexes (zero scans), duplicate indexes (same column definition), and tables that likely need indexes based on scan patterns.

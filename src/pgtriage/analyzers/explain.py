@@ -34,6 +34,7 @@ DML_ANYWHERE_PATTERN = re.compile(
 )
 
 STATEMENT_TIMEOUT_MS = 10_000  # 10 seconds max per EXPLAIN ANALYZE
+PARAMETER_PATTERN = re.compile(r"\$(\d+)\b")
 
 
 def _mask_sql_literals_and_comments(query: str) -> str | None:
@@ -191,7 +192,19 @@ async def run_explain_analyze(
         return None
 
     clean_query = query.rstrip().rstrip(";")
-    explain_sql = f"EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {clean_query}"
+    masked_query = _mask_sql_literals_and_comments(clean_query) or ""
+    parameter_numbers = [
+        int(match.group(1))
+        for match in PARAMETER_PATTERN.finditer(masked_query)
+    ]
+    if parameter_numbers:
+        return await _run_parameterized_explain(
+            db,
+            clean_query,
+            max(parameter_numbers),
+        )
+
+    explain_sql = f"EXPLAIN (ANALYZE, BUFFERS, VERBOSE, FORMAT JSON) {clean_query}"
 
     await db._ensure_connected()
     try:
@@ -221,9 +234,324 @@ class _RollbackSignal(Exception):
     """Raised inside a transaction block to force ROLLBACK."""
 
 
+async def _run_parameterized_explain(
+    db: ConnectionManager,
+    query: str,
+    parameter_count: int,
+) -> list[dict] | None:
+    """Plan a normalized pg_stat_statements query without executing it.
+
+    PostgreSQL 16+ supports GENERIC_PLAN directly. Older supported versions
+    fall back to a transaction-scoped prepared statement forced to use a
+    generic plan. Both paths avoid inventing parameter values and never run the
+    underlying query.
+    """
+    await db._ensure_connected()
+    try:
+        async with db.conn.transaction():
+            async with db.conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+                await cur.execute(
+                    f"SET LOCAL statement_timeout = '{STATEMENT_TIMEOUT_MS}'"
+                )
+                await cur.execute(
+                    f"EXPLAIN (GENERIC_PLAN, VERBOSE, FORMAT JSON) {query}"
+                )
+                row = await cur.fetchone()
+                result = row.get("QUERY PLAN") if row else None
+            raise _RollbackSignal()
+    except _RollbackSignal:
+        return result
+    except psycopg.Error:
+        return await _run_prepared_generic_explain(
+            db,
+            query,
+            parameter_count,
+        )
+
+
+async def _run_prepared_generic_explain(
+    db: ConnectionManager,
+    query: str,
+    parameter_count: int,
+) -> list[dict] | None:
+    """Fallback generic-plan implementation for PostgreSQL 12 through 15."""
+    await db._ensure_connected()
+    null_parameters = ", ".join("NULL" for _ in range(parameter_count))
+    statement_name = "pgtriage_generic_explain"
+    try:
+        async with db.conn.transaction():
+            async with db.conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+                await cur.execute(
+                    f"SET LOCAL statement_timeout = '{STATEMENT_TIMEOUT_MS}'"
+                )
+                await cur.execute("SET LOCAL plan_cache_mode = force_generic_plan")
+                await cur.execute(f"PREPARE {statement_name} AS {query}")
+                await cur.execute(
+                    "EXPLAIN (VERBOSE, FORMAT JSON) "
+                    f"EXECUTE {statement_name} ({null_parameters})"
+                )
+                row = await cur.fetchone()
+                result = row.get("QUERY PLAN") if row else None
+            raise _RollbackSignal()
+    except _RollbackSignal:
+        return result
+    except psycopg.Error:
+        return None
+
+
+_IDENTIFIER = r'(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)'
+_TYPE_NAME = (
+    rf'{_IDENTIFIER}(?:\.{_IDENTIFIER})?'
+    r'(?:\s+(?:varying|precision|with(?:out)?\s+time\s+zone))?'
+    r'(?:\s*\(\s*\d+(?:\s*,\s*\d+)?\s*\))?'
+    r'(?:\[\])?'
+)
+_COLON_CAST_PATTERN = re.compile(
+    rf'\(*\s*(?:(?P<qualifier>{_IDENTIFIER})\.)?'
+    rf'(?P<column>{_IDENTIFIER})\s*\)*\s*::\s*'
+    rf'(?P<target_type>{_TYPE_NAME})',
+    re.IGNORECASE,
+)
+_CAST_FUNCTION_PATTERN = re.compile(
+    rf'\bCAST\s*\(\s*(?:(?P<qualifier>{_IDENTIFIER})\.)?'
+    rf'(?P<column>{_IDENTIFIER})\s+AS\s+'
+    rf'(?P<target_type>{_TYPE_NAME})\s*\)',
+    re.IGNORECASE,
+)
+
+_TYPE_ALIASES = {
+    "bigint": "int8",
+    "bigserial": "int8",
+    "boolean": "bool",
+    "character varying": "varchar",
+    "double precision": "float8",
+    "decimal": "numeric",
+    "integer": "int4",
+    "real": "float4",
+    "smallint": "int2",
+    "smallserial": "int2",
+    "serial": "int4",
+    "time with time zone": "timetz",
+    "time without time zone": "time",
+    "timestamp with time zone": "timestamptz",
+    "timestamp without time zone": "timestamp",
+}
+
+
+def _unquote_identifier(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if value.startswith('"') and value.endswith('"'):
+        return value[1:-1].replace('""', '"')
+    return value.lower()
+
+
+def _normalize_type(value: str | None) -> str:
+    if not value:
+        return ""
+    normalized = re.sub(r"\s+", " ", value.replace('"', "").strip().lower())
+    normalized = re.sub(
+        r"\s*\(\s*\d+(?:\s*,\s*\d+)?\s*\)",
+        "",
+        normalized,
+    )
+    if "." in normalized:
+        normalized = normalized.rsplit(".", 1)[-1]
+    return _TYPE_ALIASES.get(normalized, normalized)
+
+
+def _extract_column_casts(expression: str) -> list[dict[str, str | None]]:
+    casts: list[dict[str, str | None]] = []
+    seen: set[tuple[str | None, str, str]] = set()
+    for pattern in (_COLON_CAST_PATTERN, _CAST_FUNCTION_PATTERN):
+        for match in pattern.finditer(expression or ""):
+            qualifier = _unquote_identifier(match.group("qualifier"))
+            column = _unquote_identifier(match.group("column"))
+            target_type = _normalize_type(match.group("target_type"))
+            if not column or not target_type:
+                continue
+            key = (qualifier, column, target_type)
+            if key in seen:
+                continue
+            seen.add(key)
+            casts.append({
+                "qualifier": qualifier,
+                "column": column,
+                "target_type": target_type,
+            })
+    return casts
+
+
+def _rows_examined(node: dict) -> int:
+    try:
+        loops = max(float(node.get("Actual Loops", 1) or 1), 1.0)
+        returned = float(node.get("Actual Rows", 0) or 0) * loops
+        removed = float(node.get("Rows Removed by Filter", 0) or 0) * loops
+        return int(returned + removed)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _relation_index_metadata(
+    index_metadata: list[dict],
+    relation: str | None,
+    schema: str | None,
+) -> list[dict]:
+    if not relation:
+        return []
+    return [
+        item for item in index_metadata
+        if item.get("table_name") == relation
+        and (not schema or item.get("schema_name") == schema)
+    ]
+
+
+def _has_matching_expression_index(
+    relation_metadata: list[dict],
+    column: str,
+    target_type: str,
+) -> bool:
+    for item in relation_metadata:
+        expression = item.get("index_expression")
+        if not expression:
+            continue
+        expression_casts = _extract_column_casts(str(expression))
+        if any(
+            cast["column"] == column
+            and cast["target_type"] == target_type
+            for cast in expression_casts
+        ):
+            normalized_expression = re.sub(r"\s+", "", str(expression).lower())
+            normalized_column = column.lower()
+            normalized_target = target_type.lower()
+            exact_forms = {
+                f"{normalized_column}::{normalized_target}",
+                f"({normalized_column})::{normalized_target}",
+                f"(({normalized_column})::{normalized_target})",
+                f"cast({normalized_column}as{normalized_target})",
+                f"(cast({normalized_column}as{normalized_target}))",
+            }
+            if normalized_expression in exact_forms:
+                return True
+    return False
+
+
+def _detect_index_suppressing_casts(
+    node: dict,
+    index_metadata: list[dict],
+    original_query: str | None,
+) -> list[Finding]:
+    if node.get("Node Type") != "Seq Scan":
+        return []
+
+    relation = node.get("Relation Name")
+    schema = node.get("Schema")
+    filter_text = str(node.get("Filter", "") or "")
+    relation_metadata = _relation_index_metadata(index_metadata, relation, schema)
+    if not relation_metadata or not filter_text:
+        return []
+
+    catalog_rows = max(
+        (
+            int(item.get("table_live_rows", 0) or 0)
+            for item in relation_metadata
+        ),
+        default=0,
+    )
+    rows_examined = max(_rows_examined(node), catalog_rows)
+    if rows_examined <= 100_000:
+        return []
+
+    result_rows = node.get("Actual Rows", node.get("Plan Rows", 0)) or 0
+    try:
+        selectivity = float(result_rows) / rows_examined
+    except (TypeError, ValueError, ZeroDivisionError):
+        selectivity = 0.0
+    if selectivity > 0.10:
+        # A sequential scan can be the correct plan when the predicate returns
+        # a substantial part of the table, even if a compatible index exists.
+        return []
+
+    findings: list[Finding] = []
+    for cast in _extract_column_casts(filter_text):
+        column = str(cast["column"])
+        target_type = str(cast["target_type"])
+        qualifier = cast["qualifier"]
+        alias = node.get("Alias")
+        if qualifier and qualifier not in {relation, alias}:
+            continue
+
+        column_indexes = [
+            item for item in relation_metadata
+            if item.get("column_name") == column
+            and item.get("is_key_column", True)
+            and int(item.get("index_position", 1) or 1) == 1
+            and item.get("index_method", "btree") in {"btree", "hash"}
+            and not item.get("index_predicate")
+        ]
+        if not column_indexes:
+            continue
+
+        source_types = {
+            _normalize_type(str(item.get("column_type", "")))
+            for item in column_indexes
+            if item.get("column_type")
+        }
+        if not source_types or target_type in source_types:
+            continue
+        if _has_matching_expression_index(relation_metadata, column, target_type):
+            continue
+
+        source_type = min(source_types)
+        index_names = sorted({
+            str(item["index_name"])
+            for item in column_indexes
+            if item.get("index_name")
+        })
+        findings.append(Finding(
+            severity=Severity.HIGH if rows_examined > 1_000_000 else Severity.MEDIUM,
+            category=Category.TYPE_MISMATCH,
+            table=relation,
+            query=original_query,
+            detail=(
+                f"Filter casts indexed column '{relation}.{column}' from "
+                f"{source_type} to {target_type} during a sequential scan examining "
+                f"{rows_examined:,} rows. Applying a cast to the column can prevent "
+                f"PostgreSQL from using {', '.join(index_names)}."
+            ),
+            estimated_impact=(
+                f"Existing index lookup replaced by a sequential scan over "
+                f"{rows_examined:,} rows"
+            ),
+            suggested_fix=(
+                f"Prefer binding or casting the compared value as {source_type} so "
+                f"'{relation}.{column}' remains uncast. If the query cannot change, "
+                f"validate an expression index on (({column})::{target_type}) with "
+                "EXPLAIN before creating it concurrently."
+            ),
+            safe_to_apply=False,
+            evidence={
+                "node_type": "Seq Scan",
+                "relation": relation,
+                "schema": schema,
+                "column": column,
+                "source_type": source_type,
+                "cast_target_type": target_type,
+                "filter": filter_text,
+                "rows_examined": rows_examined,
+                "actual_rows": node.get("Actual Rows", 0),
+                "rows_removed_by_filter": node.get("Rows Removed by Filter", 0),
+                "estimated_selectivity": round(selectivity, 6),
+                "index_names": index_names,
+            },
+        ))
+    return findings
+
+
 def detect_plan_issues(
     plan_json: list[dict],
     original_query: str | None = None,
+    index_metadata: list[dict] | None = None,
 ) -> list[Finding]:
     """Analyze an EXPLAIN ANALYZE JSON plan for performance issues."""
     if not plan_json:
@@ -231,7 +559,7 @@ def detect_plan_issues(
 
     findings = []
     plan = plan_json[0].get("Plan", {})
-    _walk_plan_node(plan, findings, original_query)
+    _walk_plan_node(plan, findings, original_query, index_metadata or [])
     return findings
 
 
@@ -239,25 +567,35 @@ def _walk_plan_node(
     node: dict,
     findings: list[Finding],
     original_query: str | None = None,
+    index_metadata: list[dict] | None = None,
 ) -> None:
     node_type = node.get("Node Type", "")
     relation = node.get("Relation Name")
     actual_rows = node.get("Actual Rows", 0)
     plan_rows = node.get("Plan Rows", 0)
+    rows_examined = _rows_examined(node)
+    cast_findings = _detect_index_suppressing_casts(
+        node,
+        index_metadata or [],
+        original_query,
+    )
+    findings.extend(cast_findings)
 
-    if node_type == "Seq Scan" and actual_rows > 100_000:
+    if node_type == "Seq Scan" and rows_examined > 100_000 and not cast_findings:
         filter_text = node.get("Filter", "")
         findings.append(Finding(
-            severity=Severity.HIGH if actual_rows > 1_000_000 else Severity.MEDIUM,
+            severity=Severity.HIGH if rows_examined > 1_000_000 else Severity.MEDIUM,
             category=Category.SEQUENTIAL_SCAN,
             table=relation,
             query=original_query,
             detail=(
-                f"Sequential scan on '{relation}' reading {actual_rows:,} rows. "
+                f"Sequential scan on '{relation}' examining {rows_examined:,} rows. "
                 f"Filter: {filter_text or 'none'}. "
                 f"An index on the filtered columns would likely eliminate this scan."
             ),
-            estimated_impact=f"Scanning {actual_rows:,} rows instead of targeted index lookup",
+            estimated_impact=(
+                f"Scanning {rows_examined:,} rows instead of targeted index lookup"
+            ),
             suggested_fix=(
                 f"Identify the columns in the WHERE clause and create a targeted index: "
                 f"CREATE INDEX CONCURRENTLY ON {relation} (...);"
@@ -266,6 +604,8 @@ def _walk_plan_node(
             evidence={
                 "node_type": node_type,
                 "actual_rows": actual_rows,
+                "rows_examined": rows_examined,
+                "rows_removed_by_filter": node.get("Rows Removed by Filter", 0),
                 "filter": filter_text,
                 "relation": relation,
             },
@@ -317,4 +657,4 @@ def _walk_plan_node(
             ))
 
     for child in node.get("Plans", []):
-        _walk_plan_node(child, findings, original_query)
+        _walk_plan_node(child, findings, original_query, index_metadata or [])
