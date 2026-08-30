@@ -21,7 +21,7 @@ EMPTY_RESULT = {
 
 
 @pytest.mark.asyncio
-async def test_full_audit_passes_schema_to_index_health(monkeypatch):
+async def test_full_audit_passes_schema_to_scoped_tools(monkeypatch):
     table_health = AsyncMock(return_value=EMPTY_RESULT)
     slow_queries = AsyncMock(return_value=EMPTY_RESULT)
     index_health = AsyncMock(return_value=EMPTY_RESULT)
@@ -34,21 +34,27 @@ async def test_full_audit_passes_schema_to_index_health(monkeypatch):
 
     await server.full_audit(slow_query_limit=20, schema_name="pgtriage_demo")
 
-    slow_queries.assert_awaited_once_with(limit=20)
+    table_health.assert_awaited_once_with(schema_name="pgtriage_demo")
+    slow_queries.assert_awaited_once_with(
+        limit=20,
+        schema_name="pgtriage_demo",
+    )
     index_health.assert_awaited_once_with(schema_name="pgtriage_demo")
 
 
 @pytest.mark.asyncio
-async def test_full_audit_defaults_index_health_to_public(monkeypatch):
+async def test_full_audit_defaults_to_all_user_schemas(monkeypatch):
+    table_health = AsyncMock(return_value=EMPTY_RESULT)
     monkeypatch.setattr(
         server,
         "check_table_health",
-        AsyncMock(return_value=EMPTY_RESULT),
+        table_health,
     )
+    slow_queries = AsyncMock(return_value=EMPTY_RESULT)
     monkeypatch.setattr(
         server,
         "analyze_slow_queries",
-        AsyncMock(return_value=EMPTY_RESULT),
+        slow_queries,
     )
     index_health = AsyncMock(return_value=EMPTY_RESULT)
     monkeypatch.setattr(server, "check_index_health", index_health)
@@ -60,4 +66,6 @@ async def test_full_audit_defaults_index_health_to_public(monkeypatch):
 
     await server.full_audit()
 
-    index_health.assert_awaited_once_with(schema_name="public")
+    table_health.assert_awaited_once_with(schema_name=None)
+    slow_queries.assert_awaited_once_with(limit=10, schema_name=None)
+    index_health.assert_awaited_once_with(schema_name=None)

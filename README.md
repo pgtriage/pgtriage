@@ -120,21 +120,23 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO pgtriage_reader;
 > review my PostgreSQL configuration
 
 > find slow queries
+
+> audit only the accounts schema
 ```
 
 ## Tools
 
 ### `full_audit`
-Run a comprehensive performance audit covering table health, slow queries, index health, and configuration. Returns all findings sorted by severity.
+Run a comprehensive performance audit covering table health, slow queries, index health, and configuration. Pass the optional `schema_name` argument to scope table, plan, and index findings to one user schema; omit it to audit every non-system schema. Configuration findings remain database-wide. Returns all findings sorted by severity.
 
 ### `check_table_health`
-Analyze dead tuples, autovacuum stats, sequential scan ratios, and TOAST bloat. Optionally filter to a specific table.
+Analyze dead tuples, autovacuum stats, sequential scan ratios, and TOAST bloat. Optionally filter to a specific user schema and/or table.
 
 ### `analyze_slow_queries`
-Pull the slowest queries from `pg_stat_statements`, inspect their execution plans, and detect patterns like indexed-column type casts, sequential scans, stale statistics, and N+1 queries. Literal queries use bounded `EXPLAIN ANALYZE`; normalized queries containing placeholders use a non-executing generic plan.
+Pull the slowest queries from `pg_stat_statements`, inspect their execution plans, and detect patterns like indexed-column type casts, sequential scans, stale statistics, and N+1 queries. An optional `schema_name` filter uses verbose execution-plan metadata rather than parsing SQL text. Literal queries use bounded `EXPLAIN ANALYZE`; normalized queries containing placeholders use a non-executing generic plan.
 
 ### `check_index_health`
-Find unused indexes (zero scans), duplicate indexes (same column definition), and tables that likely need indexes based on scan patterns.
+Find unused indexes (zero scans), duplicate indexes (same column definition), and tables that likely need indexes based on scan patterns. Optionally scope the analysis to one user schema.
 
 ### `check_config`
 Review PostgreSQL settings (`shared_buffers`, `work_mem`, `autovacuum_vacuum_scale_factor`, `random_page_cost`, etc.) and flag suboptimal values. Checks connection utilization and long-running queries.

@@ -18,7 +18,7 @@ JOIN pg_index i ON s.indexrelid = i.indexrelid
 WHERE s.idx_scan = 0
   AND NOT i.indisunique
   AND NOT i.indisprimary
-  AND s.schemaname = %s
+  AND (%s::text IS NULL OR s.schemaname = %s)
 ORDER BY pg_relation_size(s.indexrelid) DESC
 """
 
@@ -40,7 +40,7 @@ JOIN pg_index b ON a.indrelid = b.indrelid
 JOIN pg_namespace n ON n.oid = (
     SELECT relnamespace FROM pg_class WHERE oid = a.indrelid
 )
-WHERE n.nspname = %s
+WHERE (%s::text IS NULL OR n.nspname = %s)
 ORDER BY pg_relation_size(a.indexrelid) + pg_relation_size(b.indexrelid) DESC
 """
 
@@ -59,6 +59,7 @@ FROM pg_stat_user_tables
 WHERE n_live_tup > 100000
   AND seq_scan > idx_scan
   AND seq_scan > 100
+  AND (%s::text IS NULL OR schemaname = %s)
 ORDER BY seq_tup_read DESC
 LIMIT 20
 """
@@ -98,32 +99,38 @@ WHERE indexes.indisvalid
   AND indexes.indisready
   AND tbl.relkind IN ('r', 'p', 'm')
   AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+  AND (%s::text IS NULL OR n.nspname = %s)
 ORDER BY n.nspname, tbl.relname, idx.relname, keys.position
 """
 
 
 async def collect_unused_indexes(
     db: ConnectionManager,
-    schema_name: str = "public",
+    schema_name: str | None = None,
 ) -> list[dict]:
-    return await db.fetch_all(UNUSED_INDEXES_QUERY, (schema_name,))
+    return await db.fetch_all(UNUSED_INDEXES_QUERY, (schema_name, schema_name))
 
 
 async def collect_duplicate_indexes(
     db: ConnectionManager,
-    schema_name: str = "public",
+    schema_name: str | None = None,
 ) -> list[dict]:
-    return await db.fetch_all(DUPLICATE_INDEXES_QUERY, (schema_name,))
+    return await db.fetch_all(DUPLICATE_INDEXES_QUERY, (schema_name, schema_name))
 
 
 async def collect_tables_needing_indexes(
     db: ConnectionManager,
+    schema_name: str | None = None,
 ) -> list[dict]:
-    return await db.fetch_all(TABLES_NEEDING_INDEXES_QUERY)
+    return await db.fetch_all(
+        TABLES_NEEDING_INDEXES_QUERY,
+        (schema_name, schema_name),
+    )
 
 
 async def collect_index_metadata(
     db: ConnectionManager,
+    schema_name: str | None = None,
 ) -> list[dict]:
     """Collect indexed columns, source types, and expression-index definitions.
 
@@ -132,4 +139,4 @@ async def collect_index_metadata(
     columns. Expression indexes are included so an already-supported cast does
     not produce a duplicate recommendation.
     """
-    return await db.fetch_all(INDEX_METADATA_QUERY)
+    return await db.fetch_all(INDEX_METADATA_QUERY, (schema_name, schema_name))

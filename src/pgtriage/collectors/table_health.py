@@ -27,10 +27,10 @@ SELECT
     n_tup_del
 FROM pg_stat_user_tables
 WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+  AND (%s::text IS NULL OR schemaname = %s)
+  AND (%s::text IS NULL OR relname = %s)
 ORDER BY n_dead_tup DESC
 """
-
-TABLE_STATS_FILTERED_QUERY = TABLE_STATS_QUERY.rstrip() + "\nAND relname = %s"
 
 TABLE_SIZES_QUERY = """
 SELECT
@@ -53,6 +53,7 @@ FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE c.relkind = 'r'
   AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+  AND (%s::text IS NULL OR n.nspname = %s)
 ORDER BY pg_total_relation_size(c.oid) DESC
 """
 
@@ -60,13 +61,16 @@ ORDER BY pg_total_relation_size(c.oid) DESC
 async def collect_table_stats(
     db: ConnectionManager,
     table_name: str | None = None,
+    schema_name: str | None = None,
 ) -> list[dict]:
-    if table_name:
-        return await db.fetch_all(TABLE_STATS_FILTERED_QUERY, (table_name,))
-    return await db.fetch_all(TABLE_STATS_QUERY)
+    return await db.fetch_all(
+        TABLE_STATS_QUERY,
+        (schema_name, schema_name, table_name, table_name),
+    )
 
 
 async def collect_table_sizes(
     db: ConnectionManager,
+    schema_name: str | None = None,
 ) -> list[dict]:
-    return await db.fetch_all(TABLE_SIZES_QUERY)
+    return await db.fetch_all(TABLE_SIZES_QUERY, (schema_name, schema_name))

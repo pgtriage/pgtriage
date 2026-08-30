@@ -552,6 +552,7 @@ def detect_plan_issues(
     plan_json: list[dict],
     original_query: str | None = None,
     index_metadata: list[dict] | None = None,
+    schema_name: str | None = None,
 ) -> list[Finding]:
     """Analyze an EXPLAIN ANALYZE JSON plan for performance issues."""
     if not plan_json:
@@ -559,8 +560,30 @@ def detect_plan_issues(
 
     findings = []
     plan = plan_json[0].get("Plan", {})
-    _walk_plan_node(plan, findings, original_query, index_metadata or [])
+    _walk_plan_node(
+        plan,
+        findings,
+        original_query,
+        index_metadata or [],
+        schema_name,
+    )
     return findings
+
+
+def plan_references_schema(plan_json: list[dict], schema_name: str) -> bool:
+    """Return whether a verbose PostgreSQL plan references a schema."""
+    if not plan_json:
+        return False
+    return _node_references_schema(plan_json[0].get("Plan", {}), schema_name)
+
+
+def _node_references_schema(node: dict, schema_name: str) -> bool:
+    if node.get("Schema") == schema_name:
+        return True
+    return any(
+        _node_references_schema(child, schema_name)
+        for child in node.get("Plans", [])
+    )
 
 
 def _walk_plan_node(
@@ -568,20 +591,38 @@ def _walk_plan_node(
     findings: list[Finding],
     original_query: str | None = None,
     index_metadata: list[dict] | None = None,
+    schema_name: str | None = None,
 ) -> None:
     node_type = node.get("Node Type", "")
     relation = node.get("Relation Name")
     actual_rows = node.get("Actual Rows", 0)
     plan_rows = node.get("Plan Rows", 0)
     rows_examined = _rows_examined(node)
-    cast_findings = _detect_index_suppressing_casts(
-        node,
-        index_metadata or [],
-        original_query,
+    node_in_scope = (
+        schema_name is None
+        or _node_references_schema(node, schema_name)
+    )
+    relation_in_scope = (
+        schema_name is None
+        or node.get("Schema") == schema_name
+    )
+    cast_findings = (
+        _detect_index_suppressing_casts(
+            node,
+            index_metadata or [],
+            original_query,
+        )
+        if relation_in_scope
+        else []
     )
     findings.extend(cast_findings)
 
-    if node_type == "Seq Scan" and rows_examined > 100_000 and not cast_findings:
+    if (
+        relation_in_scope
+        and node_type == "Seq Scan"
+        and rows_examined > 100_000
+        and not cast_findings
+    ):
         filter_text = node.get("Filter", "")
         findings.append(Finding(
             severity=Severity.HIGH if rows_examined > 1_000_000 else Severity.MEDIUM,
@@ -608,10 +649,11 @@ def _walk_plan_node(
                 "rows_removed_by_filter": node.get("Rows Removed by Filter", 0),
                 "filter": filter_text,
                 "relation": relation,
+                "schema": node.get("Schema"),
             },
         ))
 
-    if plan_rows > 0 and actual_rows > 0:
+    if node_in_scope and plan_rows > 0 and actual_rows > 0:
         estimate_ratio = actual_rows / max(plan_rows, 1)
         if estimate_ratio > 10 or estimate_ratio < 0.1:
             findings.append(Finding(
@@ -630,13 +672,18 @@ def _walk_plan_node(
                     "actual_rows": actual_rows,
                     "estimate_ratio": round(estimate_ratio, 2),
                     "relation": relation,
+                    "schema": node.get("Schema"),
                 },
             ))
 
-    if node_type == "Nested Loop" and actual_rows > 10_000:
+    if node_in_scope and node_type == "Nested Loop" and actual_rows > 10_000:
         inner = node.get("Plans", [{}])
         inner_type = inner[-1].get("Node Type", "") if inner else ""
-        if inner_type == "Seq Scan":
+        inner_in_scope = (
+            schema_name is None
+            or (inner and _node_references_schema(inner[-1], schema_name))
+        )
+        if inner_type == "Seq Scan" and inner_in_scope:
             inner_relation = inner[-1].get("Relation Name", "unknown")
             findings.append(Finding(
                 severity=Severity.HIGH,
@@ -653,8 +700,15 @@ def _walk_plan_node(
                     "inner_type": inner_type,
                     "actual_rows": actual_rows,
                     "inner_relation": inner_relation,
+                    "schema": inner[-1].get("Schema"),
                 },
             ))
 
     for child in node.get("Plans", []):
-        _walk_plan_node(child, findings, original_query, index_metadata or [])
+        _walk_plan_node(
+            child,
+            findings,
+            original_query,
+            index_metadata or [],
+            schema_name,
+        )

@@ -2,7 +2,11 @@
 
 import pytest
 
-from pgtriage.analyzers.explain import detect_plan_issues, is_safe_to_explain
+from pgtriage.analyzers.explain import (
+    detect_plan_issues,
+    is_safe_to_explain,
+    plan_references_schema,
+)
 from pgtriage.models import Category, Severity
 
 
@@ -228,6 +232,45 @@ class TestDetectPlanIssues:
     def test_handles_no_plan_key(self):
         findings = detect_plan_issues([{}])
         assert len(findings) == 0
+
+    def test_schema_filter_excludes_other_schema_findings(self):
+        plan = [{"Plan": {
+            "Node Type": "Append",
+            "Plans": [
+                {
+                    "Node Type": "Seq Scan",
+                    "Schema": "accounts",
+                    "Relation Name": "customers",
+                    "Actual Rows": 200_000,
+                    "Plan Rows": 200_000,
+                },
+                {
+                    "Node Type": "Seq Scan",
+                    "Schema": "ledger",
+                    "Relation Name": "entries",
+                    "Actual Rows": 300_000,
+                    "Plan Rows": 300_000,
+                },
+            ],
+        }}]
+
+        findings = detect_plan_issues(plan, schema_name="accounts")
+
+        assert [finding.table for finding in findings] == ["customers"]
+        assert findings[0].evidence["schema"] == "accounts"
+
+    def test_plan_references_nested_schema(self):
+        plan = [{"Plan": {
+            "Node Type": "Hash Join",
+            "Plans": [{
+                "Node Type": "Seq Scan",
+                "Schema": "accounts",
+                "Relation Name": "customers",
+            }],
+        }}]
+
+        assert plan_references_schema(plan, "accounts") is True
+        assert plan_references_schema(plan, "ledger") is False
 
     def test_detects_cast_on_indexed_column_that_forces_large_seq_scan(self):
         plan = [{"Plan": {

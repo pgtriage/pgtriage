@@ -8,7 +8,11 @@ import psycopg
 from mcp.server.fastmcp import FastMCP
 
 from pgtriage.analyzers.config_rules import analyze_config
-from pgtriage.analyzers.explain import detect_plan_issues, run_explain_analyze
+from pgtriage.analyzers.explain import (
+    detect_plan_issues,
+    plan_references_schema,
+    run_explain_analyze,
+)
 from pgtriage.analyzers.patterns import (
     analyze_dead_tuples,
     analyze_sequential_scans,
@@ -22,6 +26,7 @@ from pgtriage.collectors.index_health import (
     collect_tables_needing_indexes,
     collect_unused_indexes,
 )
+from pgtriage.collectors.schemas import validate_schema_name
 from pgtriage.collectors.slow_queries import (
     collect_n_plus_one_candidates,
     collect_slow_queries,
@@ -78,14 +83,16 @@ mcp = FastMCP(
 @mcp.tool()
 async def check_table_health(
     table_name: str | None = None,
+    schema_name: str | None = None,
 ) -> dict:
     """Check table health: dead tuples, bloat, vacuum stats, scan ratios.
-    Optionally filter to a specific table by name."""
+    Optionally filter to a specific user schema and/or table by name."""
     ctx = mcp.get_context()
     db = ctx.request_context.lifespan_context.db
 
-    table_stats = await collect_table_stats(db, table_name)
-    table_sizes = await collect_table_sizes(db)
+    await validate_schema_name(db, schema_name)
+    table_stats = await collect_table_stats(db, table_name, schema_name)
+    table_sizes = await collect_table_sizes(db, schema_name)
 
     findings = []
     findings.extend(analyze_dead_tuples(table_stats))
@@ -104,12 +111,14 @@ async def check_table_health(
 async def analyze_slow_queries(
     limit: int = 10,
     min_calls: int = 5,
+    schema_name: str | None = None,
 ) -> dict:
     """Find and analyze slow queries from pg_stat_statements.
     Runs EXPLAIN ANALYZE on top slow SELECT queries and detects
     performance patterns like sequential scans and missing indexes."""
     ctx = mcp.get_context()
     db = ctx.request_context.lifespan_context.db
+    await validate_schema_name(db, schema_name)
 
     if not await is_pg_stat_statements_available(db):
         no_ext = Finding(
@@ -144,21 +153,30 @@ async def analyze_slow_queries(
 
     slow_queries = await collect_slow_queries(db, limit, min_calls)
     try:
-        index_metadata = await collect_index_metadata(db)
+        index_metadata = await collect_index_metadata(db, schema_name)
     except psycopg.Error:
         # Catalog metadata enriches plan findings but must never make the
         # existing slow-query audit unavailable on a restricted database role.
         index_metadata = []
     findings = []
+    plans_by_query: dict[str, list[dict] | None] = {}
+    queries_in_scope = 0
 
     for sq in slow_queries:
         query_text = sq.get("query", "")
         plan = await run_explain_analyze(db, query_text)
+        plans_by_query[query_text] = plan
+        if schema_name and (
+            not plan or not plan_references_schema(plan, schema_name)
+        ):
+            continue
+        queries_in_scope += 1
         if plan:
             plan_findings = detect_plan_issues(
                 plan,
                 query_text,
                 index_metadata=index_metadata,
+                schema_name=schema_name,
             )
             for f in plan_findings:
                 f.evidence["mean_exec_time_ms"] = sq.get("mean_exec_time_ms")
@@ -169,6 +187,16 @@ async def analyze_slow_queries(
 
     n_plus_one = await collect_n_plus_one_candidates(db)
     for npo in n_plus_one:
+        query_text = npo.get("query", "")
+        if schema_name:
+            if query_text not in plans_by_query:
+                plans_by_query[query_text] = await run_explain_analyze(
+                    db,
+                    query_text,
+                )
+            plan = plans_by_query[query_text]
+            if not plan or not plan_references_schema(plan, schema_name):
+                continue
         findings.append(Finding(
             severity=Severity.MEDIUM,
             category=Category.N_PLUS_ONE,
@@ -190,23 +218,26 @@ async def analyze_slow_queries(
 
     result = AuditResult.from_findings(
         findings,
-        queries_analyzed=len(slow_queries),
+        queries_analyzed=(
+            queries_in_scope if schema_name else len(slow_queries)
+        ),
     )
     return result.model_dump()
 
 
 @mcp.tool()
 async def check_index_health(
-    schema_name: str = "public",
+    schema_name: str | None = None,
 ) -> dict:
     """Find unused indexes, duplicate indexes, and missing index
     opportunities based on sequential scan patterns."""
     ctx = mcp.get_context()
     db = ctx.request_context.lifespan_context.db
+    await validate_schema_name(db, schema_name)
 
     unused = await collect_unused_indexes(db, schema_name)
     duplicates = await collect_duplicate_indexes(db, schema_name)
-    needs_indexes = await collect_tables_needing_indexes(db)
+    needs_indexes = await collect_tables_needing_indexes(db, schema_name)
 
     findings = []
     total_indexes = len(unused)
@@ -327,26 +358,29 @@ async def check_config() -> dict:
 @mcp.tool()
 async def full_audit(
     slow_query_limit: int = 10,
-    schema_name: str = "public",
+    schema_name: str | None = None,
 ) -> dict:
     """Run a comprehensive performance audit: table health,
     slow queries, index health, and configuration review.
     Returns a unified report with all findings sorted by severity.
 
-    Table health and slow-query analysis cover all user schemas. The
-    schema_name argument scopes index-health analysis, which defaults to
-    PostgreSQL's conventional public schema.
+    Optionally scope table, slow-query, and index findings to one user schema.
+    Configuration findings remain database-wide. Omitting schema_name audits
+    all non-system schemas.
     """
     all_findings = []
     sections = {}
 
-    table_result = await check_table_health()
+    table_result = await check_table_health(schema_name=schema_name)
     sections["table_health"] = table_result
     all_findings.extend(
         Finding(**f) for f in table_result.get("findings", [])
     )
 
-    query_result = await analyze_slow_queries(limit=slow_query_limit)
+    query_result = await analyze_slow_queries(
+        limit=slow_query_limit,
+        schema_name=schema_name,
+    )
     sections["slow_queries"] = query_result
     all_findings.extend(
         Finding(**f) for f in query_result.get("findings", [])
