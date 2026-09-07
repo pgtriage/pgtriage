@@ -28,3 +28,10 @@ jobs:
 
       - name: Publish distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-mcp:
+    needs: publish
+    uses: ./.github/workflows/publish-mcp.yml
+    permissions:
+      id-token: write
+      contents: read
