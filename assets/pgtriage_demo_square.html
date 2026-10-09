@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>pgtriage v6 square</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>pgtriage v7 square</title>
 <style>
 @font-face { font-family:'JetBrains Mono'; src:url('fonts/fontsource-jetbrains-mono-5.3.0/files/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight:400; }
 @font-face { font-family:'JetBrains Mono'; src:url('fonts/fontsource-jetbrains-mono-5.3.0/files/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight:500; }
@@ -138,7 +138,7 @@ html,body{width:100%;height:auto;overflow:auto}body{padding:24px;background:#080
 
 <div class="scene" id="s3">
   <div id="findings">
-    <div id="eyebrow">AUDIT RESULT</div>
+    <div id="eyebrow">SAMPLE AUDIT</div>
     <div id="counter">scanned <span class="n" id="ctab">0 tables</span> · found <span class="bad" id="cfind">0 issues</span></div>
     <div class="sevrow" id="r1" style="opacity:0"><span class="badge b-crit">CRITICAL</span>connection pressure at 99%<span class="cnt">1</span></div>
     <div class="sevrow" id="r2" style="opacity:0"><span class="badge b-med">MEDIUM</span>duplicate indexes<span class="cnt">19</span></div>
@@ -147,7 +147,7 @@ html,body{width:100%;height:auto;overflow:auto}body{padding:24px;background:#080
     <div id="fix" style="height:0;opacity:0"><div id="fixinner">
       <div id="fixctx">unused_index · table "orders" · low</div>
       <div id="sqlbig"><span class="sqlfix" id="sqltyped"></span><span id="sqlcursor"></span></div>
-      <div id="advnote">suggested fix</div>
+      <div id="advnote">suggested SQL · advisory · never executed</div>
     </div></div>
   </div>
 </div>
@@ -165,7 +165,7 @@ html,body{width:100%;height:auto;overflow:auto}body{padding:24px;background:#080
 <div id="fade"></div>
 </div>
 
-</div><aside id="controls"><div>PGTRIAGE / V6 SQUARE</div><h1>One source.<br>Two compositions.</h1><p>V6 data and timing preserved. The SQL completes at 11.3 seconds; the findings fade begins at 12.6 seconds.</p><button id="play">Play</button><button id="restart">Restart</button><div><button data-time="5.6">Safety</button><button data-time="11.5">SQL fix</button><button data-time="14.9">Close</button></div><p><label for="scrub">Time <span id="time">0.0</span> / 16s</label></p><input id="scrub" type="range" min="0" max="15.999" step="0.01" value="0"><p id="source-note">Source: pgtriage_demo.html, supplied v6.</p></aside></div><script>
+</div><aside id="controls"><div>PGTRIAGE / V7 SQUARE</div><h1>One source.<br>Two compositions.</h1><p>V7 data and timing preserved. The SQL completes at 11.3 seconds; the findings fade begins at 12.6 seconds.</p><button id="play">Play</button><button id="restart">Restart</button><div><button data-time="5.6">Safety</button><button data-time="11.5">SQL fix</button><button data-time="14.9">Close</button></div><p><label for="scrub">Time <span id="time">0.0</span> / 16s</label></p><input id="scrub" type="range" min="0" max="15.999" step="0.01" value="0"><p id="source-note">Sample audit figures and orders SQL are illustrative. No SQL is executed. Source: pgtriage_demo.html, supplied v7.</p></aside></div><script>
 const $=id=>document.getElementById(id);
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -246,8 +246,8 @@ function seek(t){
   const sqlN=Math.floor(seg(t,10.2,11.3)*SQL.length);
   $('sqltyped').textContent=SQL.slice(0,sqlN);
   $('sqlcursor').style.opacity=(fx>0.5&&t<12.4&&Math.floor(t*2.4)%2===0)?1:0;
-  // highlight the unused-index row while expanded
-  $('r3').style.background=`rgba(143,163,188,${0.06*fx})`;
+  // highlight the LOW unused-index row while expanded
+  $('r3').style.background=`rgba(143,163,188,${0.07*fx})`;
 
   // --- scene 4: endcard ---
   [['oss',13.2],['wordmark',13.4],['pipline',13.9],['ghline',14.3]].forEach(([id,at])=>{

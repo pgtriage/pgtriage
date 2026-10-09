@@ -74,7 +74,7 @@ html,body{width:1200px;height:627px;overflow:hidden;background:var(--bg);font-fa
   <div class="tbar"><span class="td" style="background:#F0565C"></span><span class="td" style="background:#EFA53C"></span><span class="td" style="background:#5BC48B"></span><span class="tt">any mcp client — pgtriage</span></div>
   <div class="tbody">
     <div class="prompt"><span class="caret">›</span> audit my database</div>
-    <div style="font-size:11px;letter-spacing:.14em;color:#5A6778;margin:8px 0 2px">AUDIT RESULT</div>
+    <div style="font-size:11px;letter-spacing:.14em;color:#5A6778;margin:8px 0 2px">SAMPLE AUDIT</div>
     <div class="sum" style="margin-top:2px">scanned <span class="n">283 tables</span> · found <span class="bad">147 issues</span></div>
     <div class="sevrow"><span class="badge b-crit">CRITICAL</span>connection pressure at 99%<span class="cnt">1</span></div>
     <div class="sevrow"><span class="badge b-med">MEDIUM</span>duplicate indexes<span class="cnt">19</span></div>
@@ -83,7 +83,7 @@ html,body{width:1200px;height:627px;overflow:hidden;background:var(--bg);font-fa
     <div class="fixblk">
       <div class="fctx">unused_index · table "orders" · low</div>
       <div class="fsql">DROP INDEX CONCURRENTLY<br>idx_orders_customer;</div>
-      <div class="fadv">suggested fix</div>
+      <div class="fadv">suggested SQL · advisory · never executed</div>
     </div>
   </div>
  </div>
