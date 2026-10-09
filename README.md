@@ -151,6 +151,11 @@ Review PostgreSQL settings (`shared_buffers`, `work_mem`, `autovacuum_vacuum_sca
 
 ### Agent runtime integration
 
+[pgtriage Agent Lab](https://github.com/manas-maheshwari/pgtriage-agent-lab)
+is a runnable TypeScript reference client that demonstrates authorization,
+bounded retries, durable workflow state, and fail-closed review around this MCP
+boundary.
+
 pgtriage publishes MCP safety annotations for every tool. All tools are marked
 read-only and non-destructive; tools that can run bounded `EXPLAIN ANALYZE` are
 deliberately not marked idempotent. Agent runtimes must still allowlist,
