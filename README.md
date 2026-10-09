@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/pgtriage)](https://pypi.org/project/pgtriage/)
 [![License](https://img.shields.io/github/license/pgtriage/pgtriage)](LICENSE)
 
-![pgtriage: PostgreSQL performance auditing over MCP](https://raw.githubusercontent.com/pgtriage/pgtriage/master/assets/pgtriage-hero.png)
+![pgtriage: PostgreSQL performance auditing over MCP](https://raw.githubusercontent.com/pgtriage/pgtriage/master/assets/pgtriage_hero_v5_1280x640_github.png)
 
 Read-only MCP server for PostgreSQL performance auditing. Connect it to Claude Code (or any MCP client) and say "audit my database" to get structured findings with evidence and suggested fixes.
 
@@ -130,7 +130,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO pgtriage_reader;
 
 ## Demo
 
-![pgtriage auditing PostgreSQL through an MCP client](https://raw.githubusercontent.com/pgtriage/pgtriage/master/assets/pgtriage_demo_v6.gif)
+![pgtriage auditing PostgreSQL through an MCP client](https://raw.githubusercontent.com/pgtriage/pgtriage/master/assets/pgtriage_demo_v7.gif)
 
 ## Tools
 

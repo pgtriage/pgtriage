@@ -1,6 +1,6 @@
 # pgtriage launch animation
 
-The supplied v6 source is `pgtriage_demo.html` (1280 × 720). The corresponding MP4 and GIF exports are generated from that source. `pgtriage_demo_square.html` recomposes the same animation at 1080 × 1080 with responsive playback controls. Serve assets over HTTP to preview; for example, run `python3 -m http.server 8765` from the repository root and open `/assets/pgtriage_demo_square.html`.
+The supplied v7 source is `pgtriage_demo.html` (1280 × 720). The corresponding MP4 and GIF exports are generated from that source. `pgtriage_demo_square.html` recomposes the same animation at 1080 × 1080 with responsive playback controls. Serve assets over HTTP to preview; for example, run `python3 -m http.server 8765` from the repository root and open `/assets/pgtriage_demo_square.html`.
 
 ## Consistency contract
 
@@ -13,7 +13,7 @@ The canonical first script block and all three scene markup blocks are identical
 - SQL types: 10.2–11.3 seconds; full text remains until fading starts at 12.6 seconds.
 - Endcard enters at 13.0 seconds; loop fade starts at 15.3 seconds.
 
-V6 uses a demonstration dataset: 283 tables, 147 issues, including 1 critical, 19 medium, 64 low and 63 more across seven categories. These are separate from the README's real-audit totals. The featured `unused_index` finding and `DROP INDEX CONCURRENTLY` suggestion match current detector output. CRITICAL connection pressure, MEDIUM duplicate indexes and LOW unused indexes match current detector severities.
+V7 uses a demonstration dataset: 283 tables, 147 issues, including 1 critical, 19 medium, 64 low and 63 more across seven categories. These are separate from the README's real-audit totals. The featured `unused_index` finding and `DROP INDEX CONCURRENTLY` suggestion match current detector output. CRITICAL connection pressure, MEDIUM duplicate indexes and LOW unused indexes match current detector severities.
 
 ## Fonts and scope
 
