@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/pgtriage)](https://pypi.org/project/pgtriage/)
 [![License](https://img.shields.io/github/license/pgtriage/pgtriage)](LICENSE)
 
-![pgtriage: PostgreSQL performance auditing over MCP](assets/pgtriage-hero.png)
+![pgtriage: PostgreSQL performance auditing over MCP](https://raw.githubusercontent.com/pgtriage/pgtriage/master/assets/pgtriage-hero.png)
 
 Read-only MCP server for PostgreSQL performance auditing. Connect it to Claude Code (or any MCP client) and say "audit my database" to get structured findings with evidence and suggested fixes.
 
@@ -15,17 +15,19 @@ Read-only MCP server for PostgreSQL performance auditing. Connect it to Claude C
 
 ## Why I built this
 
-Built after diagnosing implicit type casts and missing indexes on multi-million-row tables in production fintech systems. The fixes were simple (one `CREATE INDEX CONCURRENTLY` statement each), but finding them required reading query plans most engineers never look at. pgtriage automates that diagnostic process and lets any AI client explain the results.
+Built after diagnosing implicit type casts and missing indexes on multi-million-row tables in production fintech systems. The fixes were simple (one `CREATE INDEX CONCURRENTLY` statement each), but finding them required reading query plans most engineers never look at. A real production audit surfaced 88 findings across 118 tables. pgtriage automates that diagnostic process and lets any AI client explain the results.
 
 ## How it works
 
-![MCP clients call pgtriage, which collects read-only PostgreSQL evidence and returns structured findings](assets/pgtriage-architecture.png)
+![MCP clients call pgtriage, which collects read-only PostgreSQL evidence and returns structured findings](https://raw.githubusercontent.com/pgtriage/pgtriage/master/assets/pgtriage-architecture.png)
 
 pgtriage connects to your PostgreSQL database and exposes performance auditing tools via the Model Context Protocol. It collects metrics from PostgreSQL system views, runs deterministic pattern detection, and returns structured findings. The MCP client provides the AI layer, interpreting results and explaining fixes in plain English.
 
 No API keys required. No AI costs. No vendor lock-in. The intelligence comes from your MCP client.
 
 ## Example output
+
+Example audit: **283 tables scanned, 147 findings** — 1 critical connection-pressure finding, 19 medium duplicate-index findings, 64 low unused-index findings, and 63 more across seven categories.
 
 ```json
 {
@@ -48,13 +50,16 @@ No API keys required. No AI costs. No vendor lock-in. The intelligence comes fro
 {
   "severity": "medium",
   "category": "duplicate_index",
-  "table": "account",
-  "detail": "Duplicate indexes on 'account': 'account_title_reverse_index' (16 kB) and 'account_group_reverse_index' (16 kB). Same column definition. One can be dropped.",
-  "suggested_fix": "DROP INDEX CONCURRENTLY account_group_reverse_index;"
+  "table": "orders",
+  "detail": "Duplicate indexes on 'orders': 'idx_orders_customer' (16 kB) and 'idx_orders_customer_copy' (16 kB). Same column definition. One can be dropped.",
+  "suggested_fix": "-- Keep the one with more scans, drop the other:\n-- CREATE INDEX idx_orders_customer ON orders (customer_id)\n-- CREATE INDEX idx_orders_customer_copy ON orders (customer_id)",
+  "safe_to_apply": false,
+  "evidence": {
+    "index_1_def": "CREATE INDEX idx_orders_customer ON orders (customer_id)",
+    "index_2_def": "CREATE INDEX idx_orders_customer_copy ON orders (customer_id)"
+  }
 }
 ```
-
-From a real audit: 118 tables scanned, 88 findings, prioritized by severity.
 
 ## What it finds
 
@@ -122,6 +127,10 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO pgtriage_reader;
 
 > audit only the accounts schema
 ```
+
+## Demo
+
+![pgtriage auditing PostgreSQL through an MCP client](https://raw.githubusercontent.com/pgtriage/pgtriage/master/assets/pgtriage_demo_v6.gif)
 
 ## Tools
 

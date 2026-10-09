@@ -126,16 +126,16 @@ html,body{width:1280px;height:720px;overflow:hidden;background:var(--bg);font-fa
 
 <div class="scene" id="s3">
   <div id="findings">
-    <div id="eyebrow">SAMPLE AUDIT</div>
+    <div id="eyebrow">AUDIT RESULT</div>
     <div id="counter">scanned <span class="n" id="ctab">0 tables</span> · found <span class="bad" id="cfind">0 issues</span></div>
-    <div class="sevrow" id="r1" style="opacity:0"><span class="badge b-high">HIGH</span>connection pressure at 104%<span class="cnt">1</span></div>
+    <div class="sevrow" id="r1" style="opacity:0"><span class="badge b-crit">CRITICAL</span>connection pressure at 99%<span class="cnt">1</span></div>
     <div class="sevrow" id="r2" style="opacity:0"><span class="badge b-med">MEDIUM</span>duplicate indexes<span class="cnt">19</span></div>
     <div class="sevrow" id="r3" style="opacity:0"><span class="badge b-low">LOW</span>unused indexes<span class="cnt">64</span></div>
     <div id="r4" style="opacity:0;font-family:'JetBrains Mono',monospace;font-size:15px;color:var(--dim);padding:6px 0 2px">+ 63 more across 7 categories</div>
     <div id="fix" style="height:0;opacity:0"><div id="fixinner">
-      <div id="fixctx">duplicate_index · table "orders" · medium</div>
+      <div id="fixctx">unused_index · table "orders" · low</div>
       <div id="sqlbig"><span class="sqlfix" id="sqltyped"></span><span id="sqlcursor"></span></div>
-      <div id="advnote">suggested SQL · advisory · never executed</div>
+      <div id="advnote">suggested fix</div>
     </div></div>
   </div>
 </div>
@@ -234,8 +234,8 @@ function seek(t){
   const sqlN=Math.floor(seg(t,10.2,11.3)*SQL.length);
   $('sqltyped').textContent=SQL.slice(0,sqlN);
   $('sqlcursor').style.opacity=(fx>0.5&&t<12.4&&Math.floor(t*2.4)%2===0)?1:0;
-  // highlight HIGH row while expanded
-  $('r2').style.background=`rgba(217,195,74,${0.06*fx})`;
+  // highlight the unused-index row while expanded
+  $('r3').style.background=`rgba(143,163,188,${0.06*fx})`;
 
   // --- scene 4: endcard ---
   [['oss',13.2],['wordmark',13.4],['pipline',13.9],['ghline',14.3]].forEach(([id,at])=>{

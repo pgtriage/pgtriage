@@ -36,6 +36,7 @@ core-metadata-version = "2.4"
 
 [tool.hatch.build.targets.sdist]
 core-metadata-version = "2.4"
+exclude = ["/assets"]
 
 [project.optional-dependencies]
 dev = [
