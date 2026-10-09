@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">How pgtriage works</title>
+  <desc id="desc">MCP clients call pgtriage over standard input and output. pgtriage collects read-only PostgreSQL evidence, applies deterministic rules, and returns structured findings.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fbfe"/>
+      <stop offset="1" stop-color="#edf5fa"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#26435b" flood-opacity="0.16"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#3b7398"/>
+    </marker>
+  </defs>
+  <rect width="1600" height="900" rx="28" fill="url(#bg)"/>
+  <text x="800" y="86" text-anchor="middle" fill="#102a43" font-family="Inter, Arial, sans-serif" font-size="48" font-weight="750">How pgtriage works</text>
+  <text x="800" y="128" text-anchor="middle" fill="#55748b" font-family="Inter, Arial, sans-serif" font-size="21">The model explains findings; deterministic code collects and classifies the evidence.</text>
+  <g font-family="Inter, Arial, sans-serif" filter="url(#shadow)">
+    <g transform="translate(90 236)">
+      <rect width="350" height="334" rx="28" fill="#ffffff" stroke="#bdd4e4" stroke-width="2"/>
+      <rect width="350" height="74" rx="28" fill="#173b57"/>
+      <path d="M0 48h350v26H0z" fill="#173b57"/>
+      <text x="175" y="48" text-anchor="middle" fill="#ffffff" font-size="27" font-weight="700">MCP client</text>
+      <text x="175" y="118" text-anchor="middle" fill="#486a82" font-size="19">Claude Code · Cursor · VS Code</text>
+      <rect x="42" y="154" width="266" height="56" rx="14" fill="#eef6fb"/>
+      <text x="175" y="189" text-anchor="middle" fill="#1d4b6b" font-size="18" font-weight="650">“audit my database”</text>
+      <rect x="42" y="228" width="266" height="62" rx="14" fill="#eef6fb"/>
+      <text x="175" y="253" text-anchor="middle" fill="#1d4b6b" font-size="16" font-weight="650">Interprets structured findings</text>
+      <text x="175" y="276" text-anchor="middle" fill="#66859b" font-size="14">and explains next steps</text>
+    </g>
+    <g transform="translate(625 184)">
+      <rect width="350" height="438" rx="28" fill="#ffffff" stroke="#77a9ca" stroke-width="3"/>
+      <rect width="350" height="78" rx="28" fill="#326791"/>
+      <path d="M0 50h350v28H0z" fill="#326791"/>
+      <text x="175" y="51" text-anchor="middle" fill="#ffffff" font-size="30" font-weight="750">pgtriage</text>
+      <g transform="translate(36 112)">
+        <rect width="278" height="72" rx="16" fill="#eaf5fb" stroke="#b4d3e5"/>
+        <text x="139" y="31" text-anchor="middle" fill="#173b57" font-size="18" font-weight="700">Collectors</text>
+        <text x="139" y="54" text-anchor="middle" fill="#66859b" font-size="14">stats · tables · indexes · plans</text>
+        <rect y="92" width="278" height="72" rx="16" fill="#ebfaf7" stroke="#aadfd5"/>
+        <text x="139" y="123" text-anchor="middle" fill="#185a55" font-size="18" font-weight="700">Pattern detection</text>
+        <text x="139" y="146" text-anchor="middle" fill="#5b8883" font-size="14">deterministic, typed findings</text>
+        <rect y="184" width="278" height="96" rx="16" fill="#fff7e8" stroke="#efd49c"/>
+        <text x="139" y="215" text-anchor="middle" fill="#80571c" font-size="18" font-weight="700">Safety controls</text>
+        <text x="139" y="240" text-anchor="middle" fill="#907044" font-size="14">read-only session · validation</text>
+        <text x="139" y="261" text-anchor="middle" fill="#907044" font-size="14">timeout · rollback</text>
+      </g>
+    </g>
+    <g transform="translate(1160 236)">
+      <rect width="350" height="334" rx="28" fill="#ffffff" stroke="#bdd4e4" stroke-width="2"/>
+      <rect width="350" height="74" rx="28" fill="#173b57"/>
+      <path d="M0 48h350v26H0z" fill="#173b57"/>
+      <text x="175" y="48" text-anchor="middle" fill="#ffffff" font-size="27" font-weight="700">PostgreSQL</text>
+      <g transform="translate(90 112)">
+        <ellipse cx="85" cy="28" rx="85" ry="28" fill="#4b83aa"/>
+        <path d="M0 28v112c0 16 38 28 85 28s85-12 85-28V28" fill="#326791"/>
+        <ellipse cx="85" cy="140" rx="85" ry="28" fill="#2b5978"/>
+        <path d="M16 72c15 12 40 18 69 18s54-6 69-18M16 110c15 12 40 18 69 18s54-6 69-18" fill="none" stroke="#9bc9e5" stroke-width="3"/>
+      </g>
+      <text x="175" y="298" text-anchor="middle" fill="#66859b" font-size="15">system views + bounded plans</text>
+    </g>
+  </g>
+  <path d="M450 350H605" fill="none" stroke="#3b7398" stroke-width="5" marker-end="url(#arrow)"/>
+  <text x="528" y="326" text-anchor="middle" fill="#3b7398" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700">MCP over stdio</text>
+  <path d="M985 350H1140" fill="none" stroke="#3b7398" stroke-width="5" marker-end="url(#arrow)"/>
+  <text x="1062" y="326" text-anchor="middle" fill="#3b7398" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700">psycopg 3</text>
+  <path d="M1140 470H985" fill="none" stroke="#58a99d" stroke-width="5" marker-end="url(#arrow)"/>
+  <text x="1062" y="502" text-anchor="middle" fill="#3c8178" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700">read-only evidence</text>
+  <path d="M605 470H450" fill="none" stroke="#58a99d" stroke-width="5" marker-end="url(#arrow)"/>
+  <text x="528" y="502" text-anchor="middle" fill="#3c8178" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700">structured findings</text>
+  <g transform="translate(150 706)" font-family="Inter, Arial, sans-serif">
+    <rect width="1300" height="106" rx="24" fill="#102a43"/>
+    <circle cx="56" cy="53" r="14" fill="#6ee7d8"/>
+    <text x="86" y="47" fill="#ffffff" font-size="20" font-weight="700">No arbitrary SQL tool. No automated remediation.</text>
+    <text x="86" y="75" fill="#a9c4d7" font-size="17">Suggested fixes are advisory; production changes remain a human decision.</text>
+  </g>
+</svg>

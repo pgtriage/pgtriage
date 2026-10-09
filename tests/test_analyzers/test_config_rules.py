@@ -54,6 +54,50 @@ class TestAnalyzeConfig:
         assert len(cp_findings) == 1
         assert cp_findings[0].severity == Severity.HIGH
 
+    def test_flags_critical_connection_pressure_against_ordinary_capacity(self):
+        settings = _make_settings()
+        conn_stats = {
+            "total_connections": 96,
+            "max_connections": 100,
+            "superuser_reserved_connections": 3,
+            "reserved_connections": 0,
+            "active_queries": 16,
+            "idle_connections": 80,
+            "long_running_queries": 0,
+        }
+        findings = analyze_config(settings, conn_stats)
+        cp_findings = [
+            f for f in findings if f.category == Category.CONNECTION_PRESSURE
+        ]
+
+        assert len(cp_findings) == 1
+        assert cp_findings[0].severity == Severity.CRITICAL
+        assert cp_findings[0].evidence == {
+            "total_connections": 96,
+            "max_connections": 100,
+            "reserved_connections": 3,
+            "ordinary_connection_capacity": 97,
+            "ordinary_slots_available": 1,
+            "utilization_pct": 99.0,
+        }
+
+    def test_ignores_connection_pressure_below_threshold(self):
+        settings = _make_settings()
+        conn_stats = {
+            "total_connections": 77,
+            "max_connections": 100,
+            "superuser_reserved_connections": 3,
+            "reserved_connections": 0,
+            "active_queries": 7,
+            "idle_connections": 70,
+            "long_running_queries": 0,
+        }
+        findings = analyze_config(settings, conn_stats)
+
+        assert not any(
+            f.category == Category.CONNECTION_PRESSURE for f in findings
+        )
+
     def test_flags_long_running_queries(self):
         settings = _make_settings()
         conn_stats = {"total_connections": 10, "max_connections": 100, "active_queries": 5, "idle_connections": 5, "long_running_queries": 3}

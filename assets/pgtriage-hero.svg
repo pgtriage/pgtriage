@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">pgtriage</title>
+  <desc id="desc">PostgreSQL performance auditing over MCP with read-only diagnostics and deterministic findings.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.55" stop-color="#0d1b2e"/>
+      <stop offset="1" stop-color="#102942"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6ee7d8"/>
+      <stop offset="1" stop-color="#65a8ff"/>
+    </linearGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="#9cc7ef" stroke-opacity="0.07"/>
+    </pattern>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#020810" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+  <rect width="1280" height="640" rx="28" fill="url(#bg)"/>
+  <rect width="1280" height="640" rx="28" fill="url(#grid)"/>
+  <circle cx="1095" cy="100" r="265" fill="#3776ab" opacity="0.08"/>
+  <circle cx="1125" cy="540" r="310" fill="#2dd4bf" opacity="0.05"/>
+  <g transform="translate(84 88)">
+    <rect width="172" height="38" rx="19" fill="#122d43" stroke="#315a78"/>
+    <circle cx="22" cy="19" r="5" fill="#6ee7d8"/>
+    <text x="38" y="25" fill="#c9e5f8" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="600" letter-spacing="1.2">OPEN SOURCE</text>
+    <text x="0" y="164" fill="#f5fbff" font-family="Inter, Arial, sans-serif" font-size="92" font-weight="750" letter-spacing="-3">pgtriage</text>
+    <rect x="2" y="188" width="460" height="7" rx="3.5" fill="url(#accent)"/>
+    <text x="0" y="248" fill="#b7cee0" font-family="Inter, Arial, sans-serif" font-size="29" font-weight="500">PostgreSQL performance auditing over MCP</text>
+    <text x="0" y="296" fill="#7fa3bc" font-family="Inter, Arial, sans-serif" font-size="21">Structured evidence. Deterministic detection. Human-reviewed fixes.</text>
+    <g transform="translate(0 354)" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="600">
+      <rect width="132" height="46" rx="23" fill="#102c38" stroke="#2c6a70"/>
+      <text x="29" y="29" fill="#8deadd">READ-ONLY</text>
+      <rect x="148" width="210" height="46" rx="23" fill="#10263c" stroke="#315b83"/>
+      <text x="174" y="29" fill="#9bc8ff">MCP-NATIVE</text>
+      <rect x="374" width="244" height="46" rx="23" fill="#10263c" stroke="#315b83"/>
+      <text x="399" y="29" fill="#9bc8ff">NO MODEL API KEY</text>
+    </g>
+  </g>
+  <g transform="translate(820 92)" filter="url(#shadow)">
+    <rect width="362" height="456" rx="30" fill="#0b1828" stroke="#31536d" stroke-width="2"/>
+    <g transform="translate(76 54)">
+      <ellipse cx="105" cy="36" rx="105" ry="36" fill="#32648a"/>
+      <path d="M0 36v146c0 20 47 36 105 36s105-16 105-36V36" fill="#214762"/>
+      <ellipse cx="105" cy="182" rx="105" ry="36" fill="#285876"/>
+      <ellipse cx="105" cy="36" rx="82" ry="22" fill="#0f2437"/>
+      <path d="M24 90c17 15 47 23 81 23s64-8 81-23M24 139c17 15 47 23 81 23s64-8 81-23" fill="none" stroke="#74b5df" stroke-opacity="0.65" stroke-width="3"/>
+      <path d="M107 54v106M75 80l32-26 32 26" fill="none" stroke="#6ee7d8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <g transform="translate(32 304)" font-family="Inter, Arial, sans-serif">
+      <rect width="298" height="58" rx="14" fill="#112b3f" stroke="#2d5874"/>
+      <circle cx="30" cy="29" r="8" fill="#ffcc66"/>
+      <text x="52" y="25" fill="#dcecf7" font-size="16" font-weight="700">MISSING INDEX</text>
+      <text x="52" y="44" fill="#7fa3bc" font-size="13">evidence-backed finding</text>
+      <rect y="72" width="298" height="58" rx="14" fill="#112b3f" stroke="#2d5874"/>
+      <circle cx="30" cy="101" r="8" fill="#ff6b81"/>
+      <text x="52" y="97" fill="#dcecf7" font-size="16" font-weight="700">CONNECTION PRESSURE</text>
+      <text x="52" y="116" fill="#7fa3bc" font-size="13">capacity nearly exhausted</text>
+    </g>
+  </g>
+</svg>

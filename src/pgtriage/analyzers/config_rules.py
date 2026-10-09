@@ -122,16 +122,28 @@ def analyze_config(
     if connection_stats:
         total = connection_stats.get("total_connections", 0)
         max_conn = connection_stats.get("max_connections", 100)
-        utilization = total / max(max_conn, 1) * 100
+        superuser_reserved = connection_stats.get("superuser_reserved_connections", 0) or 0
+        role_reserved = connection_stats.get("reserved_connections", 0) or 0
+        reserved = superuser_reserved + role_reserved
+        ordinary_capacity = max(max_conn - reserved, 1)
+        available = max(ordinary_capacity - total, 0)
+        utilization = total / ordinary_capacity * 100
 
-        if utilization > 80:
+        if utilization >= 80:
+            severity = Severity.CRITICAL if utilization >= 95 else Severity.HIGH
+            pressure = (
+                "Ordinary connection capacity is effectively exhausted."
+                if severity == Severity.CRITICAL
+                else "Approaching the ordinary connection capacity limit."
+            )
             findings.append(Finding(
-                severity=Severity.HIGH,
+                severity=severity,
                 category=Category.CONNECTION_PRESSURE,
                 detail=(
-                    f"Connection utilization at {utilization:.0f}% "
-                    f"({total}/{max_conn}). "
-                    f"Approaching max_connections limit."
+                    f"Ordinary client connection utilization at {utilization:.0f}% "
+                    f"({total}/{ordinary_capacity} usable slots; "
+                    f"{max_conn} max, {reserved} reserved). "
+                    f"{pressure}"
                 ),
                 suggested_fix=(
                     "Consider using a connection pooler (PgBouncer) or "
@@ -140,6 +152,9 @@ def analyze_config(
                 evidence={
                     "total_connections": total,
                     "max_connections": max_conn,
+                    "reserved_connections": reserved,
+                    "ordinary_connection_capacity": ordinary_capacity,
+                    "ordinary_slots_available": available,
                     "utilization_pct": round(utilization, 1),
                 },
             ))

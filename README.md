@@ -5,7 +5,9 @@
 [![Python](https://img.shields.io/pypi/pyversions/pgtriage)](https://pypi.org/project/pgtriage/)
 [![License](https://img.shields.io/github/license/pgtriage/pgtriage)](LICENSE)
 
-MCP server for PostgreSQL performance auditing. Connect it to Claude Code (or any MCP client) and say "audit my database" to get actionable performance findings with exact fixes.
+![pgtriage: PostgreSQL performance auditing over MCP](assets/pgtriage-hero.png)
+
+Read-only MCP server for PostgreSQL performance auditing. Connect it to Claude Code (or any MCP client) and say "audit my database" to get structured findings with evidence and suggested fixes.
 
 > Not related to the [pgAudit](https://www.pgaudit.org/) logging extension. pgtriage does performance triage, not compliance logging.
 
@@ -17,15 +19,7 @@ Built after diagnosing implicit type casts and missing indexes on multi-million-
 
 ## How it works
 
-```
-Any MCP Client (Claude Code / Cursor / Windsurf / VS Code)
-       |  MCP (stdio)
-       v
-pgtriage (data collection + pattern detection)
-       |  psycopg3 (read-only)
-       v
-PostgreSQL database
-```
+![MCP clients call pgtriage, which collects read-only PostgreSQL evidence and returns structured findings](assets/pgtriage-architecture.png)
 
 pgtriage connects to your PostgreSQL database and exposes performance auditing tools via the Model Context Protocol. It collects metrics from PostgreSQL system views, runs deterministic pattern detection, and returns structured findings. The MCP client provides the AI layer, interpreting results and explaining fixes in plain English.
 
@@ -35,14 +29,17 @@ No API keys required. No AI costs. No vendor lock-in. The intelligence comes fro
 
 ```json
 {
-  "severity": "high",
+  "severity": "critical",
   "category": "connection_pressure",
-  "detail": "Connection utilization at 104% (104/100). Approaching max_connections limit.",
+  "detail": "Ordinary client connection utilization at 99% (96/97 usable slots; 100 max, 3 reserved). Ordinary connection capacity is effectively exhausted.",
   "suggested_fix": "Consider using a connection pooler (PgBouncer) or increasing max_connections if RAM allows.",
   "evidence": {
-    "total_connections": 104,
+    "total_connections": 96,
     "max_connections": 100,
-    "utilization_pct": 104.0
+    "reserved_connections": 3,
+    "ordinary_connection_capacity": 97,
+    "ordinary_slots_available": 1,
+    "utilization_pct": 99.0
   }
 }
 ```
@@ -72,6 +69,8 @@ From a real audit: 118 tables scanned, 88 findings, prioritized by severity.
 - **Configuration issues** (shared_buffers, work_mem, autovacuum tuning)
 - **Connection pressure** approaching max_connections
 - **Long-running queries** holding locks
+
+See the [public roadmap](ROADMAP.md) for current priorities and non-goals.
 
 ## Quick start
 

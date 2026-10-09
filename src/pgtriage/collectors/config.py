@@ -27,6 +27,8 @@ WHERE name IN (
     'autovacuum_vacuum_cost_delay',
     'autovacuum_vacuum_cost_limit',
     'log_min_duration_statement',
+    'reserved_connections',
+    'superuser_reserved_connections',
     'track_activity_query_size'
 )
 ORDER BY name
@@ -34,12 +36,20 @@ ORDER BY name
 
 CONNECTION_STATS_QUERY = """
 SELECT
-    (SELECT count(*) FROM pg_stat_activity) AS total_connections,
-    (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') AS max_connections,
-    (SELECT count(*) FROM pg_stat_activity WHERE state = 'active') AS active_queries,
-    (SELECT count(*) FROM pg_stat_activity WHERE state = 'idle') AS idle_connections,
     (SELECT count(*) FROM pg_stat_activity
-     WHERE state = 'active'
+     WHERE backend_type = 'client backend') AS total_connections,
+    (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') AS max_connections,
+    (SELECT setting::int FROM pg_settings
+     WHERE name = 'superuser_reserved_connections') AS superuser_reserved_connections,
+    COALESCE((SELECT setting::int FROM pg_settings
+              WHERE name = 'reserved_connections'), 0) AS reserved_connections,
+    (SELECT count(*) FROM pg_stat_activity
+     WHERE backend_type = 'client backend' AND state = 'active') AS active_queries,
+    (SELECT count(*) FROM pg_stat_activity
+     WHERE backend_type = 'client backend' AND state = 'idle') AS idle_connections,
+    (SELECT count(*) FROM pg_stat_activity
+     WHERE backend_type = 'client backend'
+       AND state = 'active'
        AND now() - query_start > interval '30 seconds') AS long_running_queries
 """
 
