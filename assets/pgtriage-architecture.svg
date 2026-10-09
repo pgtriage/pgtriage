@@ -22,7 +22,7 @@
       <rect width="350" height="74" rx="28" fill="#173b57"/>
       <path d="M0 48h350v26H0z" fill="#173b57"/>
       <text x="175" y="48" text-anchor="middle" fill="#ffffff" font-size="27" font-weight="700">MCP client</text>
-      <text x="175" y="118" text-anchor="middle" fill="#486a82" font-size="19">Claude Code · Cursor · VS Code</text>
+      <text x="175" y="118" text-anchor="middle" fill="#486a82" font-size="15.5">Claude Code · Codex · Cursor · Windsurf</text>
       <rect x="42" y="154" width="266" height="56" rx="14" fill="#eef6fb"/>
       <text x="175" y="189" text-anchor="middle" fill="#1d4b6b" font-size="18" font-weight="650">“audit my database”</text>
       <rect x="42" y="228" width="266" height="62" rx="14" fill="#eef6fb"/>
