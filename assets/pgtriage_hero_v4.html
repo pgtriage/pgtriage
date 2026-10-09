@@ -1,0 +1,92 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face { font-family:'JetBrains Mono'; src:url('fonts/fontsource-jetbrains-mono-5.3.0/files/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight:400; }
+@font-face { font-family:'JetBrains Mono'; src:url('fonts/fontsource-jetbrains-mono-5.3.0/files/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight:500; }
+@font-face { font-family:'JetBrains Mono'; src:url('fonts/fontsource-jetbrains-mono-5.3.0/files/jetbrains-mono-latin-700-normal.woff2') format('woff2'); font-weight:700; }
+@font-face { font-family:'JetBrains Mono'; src:url('fonts/fontsource-jetbrains-mono-5.3.0/files/jetbrains-mono-latin-800-normal.woff2') format('woff2'); font-weight:800; }
+@font-face { font-family:'Inter'; src:url('fonts/fontsource-inter-5.3.0/files/inter-latin-400-normal.woff2') format('woff2'); font-weight:400; }
+@font-face { font-family:'Inter'; src:url('fonts/fontsource-inter-5.3.0/files/inter-latin-600-normal.woff2') format('woff2'); font-weight:600; }
+:root{--bg:#0A0F16;--panel:#101927;--line:#1D2A3B;--line2:#223145;--text:#E9EEF5;--muted:#7E8CA0;--dim:#5A6778;
+--blue:#5FA8E8;--deep:#336791;--crit:#F0565C;--high:#EFA53C;--med:#D9C34A;--green:#5BC48B;}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1200px;height:627px;overflow:hidden;background:var(--bg);font-family:'Inter',sans-serif;color:var(--text)}
+.grid{position:absolute;inset:0;opacity:.15;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:44px 44px;mask-image:radial-gradient(ellipse 90% 80% at 60% 40%,#000 30%,transparent 75%);-webkit-mask-image:radial-gradient(ellipse 90% 80% at 60% 40%,#000 30%,transparent 75%)}
+.glow{position:absolute;width:820px;height:620px;right:-160px;top:-140px;background:radial-gradient(ellipse at center,rgba(51,103,145,.30),transparent 62%)}
+.wrap{position:absolute;inset:0;padding:50px 56px 0 60px;display:flex;gap:44px}
+.left{width:568px}
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;letter-spacing:.14em;color:var(--blue);display:flex;align-items:center;gap:12px}
+.eyebrow .rule{height:1px;width:34px;background:var(--blue);opacity:.55}
+.wordmark{margin-top:18px;font-family:'JetBrains Mono',monospace;font-weight:800;font-size:74px;line-height:1;letter-spacing:-.04em;display:flex;align-items:baseline}
+.wordmark .pg{color:var(--blue)}
+.cursor{display:inline-block;width:26px;height:56px;margin-left:10px;background:var(--blue);opacity:.9;transform:translateY(5px)}
+.tagline{margin-top:20px;font-size:19px;line-height:1.55;color:#B9C4D4;max-width:545px}
+.tagline strong{color:var(--text);font-weight:600}
+.tagline code{font-family:'JetBrains Mono',monospace;font-size:16.5px;color:var(--blue);background:rgba(95,168,232,.10);border:1px solid rgba(95,168,232,.25);border-radius:5px;padding:2px 7px}
+.clients{margin-top:34px;display:flex;gap:10px}
+.cn{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;border:1px solid var(--line2);background:var(--panel);border-radius:8px;padding:9px 13px;display:flex;align-items:center;gap:8px}
+.cn span{color:#C4CFDD} .bi{width:14px;height:14px;flex:none}
+.gly{font-weight:700;font-size:12px;letter-spacing:-1px}
+.cnlabel{margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.06em;color:var(--dim)}
+.trust{margin-top:34px;display:flex;gap:11px}
+.tp{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.07em;border-radius:999px;padding:9px 18px}
+.tp.ro{color:var(--green);border:1px solid rgba(91,196,139,.45);background:rgba(91,196,139,.07)}
+.tp.mn{color:#A9C7E8;border:1px solid rgba(95,168,232,.35);background:rgba(95,168,232,.06)}
+.tp.nk{color:#A9C7E8;border:1px solid rgba(95,168,232,.35);background:rgba(95,168,232,.06)}
+.footer{position:absolute;left:60px;bottom:32px;right:56px;display:flex;align-items:center;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:13.5px;color:var(--muted)}
+.footer .repo{color:#A9B6C7}
+.term{width:476px;height:430px;margin-top:22px;background:linear-gradient(180deg,#101927,#0D141F);border:1px solid var(--line2);border-radius:12px;box-shadow:0 24px 60px rgba(0,0,0,.55),0 0 0 1px rgba(95,168,232,.06);overflow:hidden;flex-shrink:0}
+.tbar{height:38px;display:flex;align-items:center;padding:0 15px;gap:7px;border-bottom:1px solid #1C293A;background:rgba(255,255,255,.02)}
+.td{width:11px;height:11px;border-radius:50%}
+.tt{margin-left:10px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);white-space:nowrap}
+.tbody{padding:20px 22px;font-family:'JetBrains Mono',monospace;font-size:14px;line-height:1.75}
+.prompt .caret{color:var(--blue);font-weight:700}
+.sum{margin:10px 0 12px} .sum .n{color:var(--blue);font-weight:700} .sum .bad{color:var(--crit);font-weight:700}
+.sevrow{display:flex;align-items:center;gap:10px;font-size:13px;line-height:2.1;color:#A9B6C7}
+.badge{font-size:10px;font-weight:700;letter-spacing:.08em;border-radius:4px;padding:1.5px 7px}
+.b-crit{background:rgba(240,86,92,.14);color:var(--crit);border:1px solid rgba(240,86,92,.4)}
+.b-high{background:rgba(239,165,60,.13);color:var(--high);border:1px solid rgba(239,165,60,.35)}
+.b-med{background:rgba(217,195,74,.11);color:var(--med);border:1px solid rgba(217,195,74,.3)}
+.b-low{background:rgba(143,163,188,.10);color:#8FA3BC;border:1px solid rgba(143,163,188,.3)}
+.cnt{margin-left:auto;color:var(--muted)}
+.more{color:var(--dim);font-size:12.5px;line-height:2}
+.fixblk{border-top:1px solid #1C293A;margin-top:12px;padding-top:14px}
+.fctx{font-size:12px;color:var(--muted);margin-bottom:8px}
+.fsql{font-size:16.5px;font-weight:700;color:var(--green);line-height:1.4}
+.fadv{font-size:11.5px;color:var(--dim);margin-top:9px}
+</style></head><body>
+<div class="grid"></div><div class="glow"></div>
+<div class="wrap">
+ <div class="left">
+  <div class="eyebrow"><span class="rule"></span>OPEN SOURCE&nbsp;·&nbsp;MCP SERVER FOR POSTGRESQL</div>
+  <div class="wordmark"><span class="pg">pg</span>triage<span class="cursor"></span></div>
+  <div class="tagline">Say <code>"audit my database"</code> from any MCP client — deterministic detection, <strong>suggested fixes</strong>.</div>
+  <div class="clients">
+    <div class="cn" style="color:#D97757"><svg class="bi" viewBox="0 0 24 24" fill="currentColor"><path d="M21 10.5h3v3h-3v3h-1.5v3H18v-3h-1.5v3H15v-3H9v3H7.5v-3H6v3H4.5v-3H3v-3H0v-3h3v-6h18Zm-15 0h1.5v-3H6Zm10.5 0H18v-3h-1.5z"/></svg><span>Claude Code</span></div>
+    <div class="cn" style="color:#A9B2BE"><span class="gly">›_</span><span>Codex</span></div>
+    <div class="cn" style="color:#C4CDD8"><svg class="bi" viewBox="0 0 24 24" fill="currentColor"><path d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23"/></svg><span>Cursor</span></div>
+    <div class="cn" style="color:#4FC3A1"><svg class="bi" viewBox="0 0 24 24" fill="currentColor"><path d="M23.55 5.067c-1.2038-.002-2.1806.973-2.1806 2.1765v4.8676c0 .972-.8035 1.7594-1.7597 1.7594-.568 0-1.1352-.286-1.4718-.7659l-4.9713-7.1003c-.4125-.5896-1.0837-.941-1.8103-.941-1.1334 0-2.1533.9635-2.1533 2.153v4.8957c0 .972-.7969 1.7594-1.7596 1.7594-.57 0-1.1363-.286-1.4728-.7658L.4076 5.1598C.2822 4.9798 0 5.0688 0 5.2882v4.2452c0 .2147.0656.4228.1884.599l5.4748 7.8183c.3234.462.8006.8052 1.3509.9298 1.3771.313 2.6446-.747 2.6446-2.0977v-4.893c0-.972.7875-1.7593 1.7596-1.7593h.003a1.798 1.798 0 0 1 1.4718.7658l4.9723 7.0994c.4135.5905 1.05.941 1.8093.941 1.1587 0 2.1515-.9645 2.1515-2.153v-4.8948c0-.972.7875-1.7594 1.7596-1.7594h.194a.22.22 0 0 0 .2204-.2202v-4.622a.22.22 0 0 0-.2203-.2203Z"/></svg><span>Windsurf</span></div>
+  </div>
+  <div class="cnlabel">… or any other MCP client</div>
+  <div class="trust">
+    <span class="tp ro">READ-ONLY</span><span class="tp mn">MCP-NATIVE</span><span class="tp nk">NO MODEL API KEY</span>
+  </div>
+ </div>
+ <div class="term">
+  <div class="tbar"><span class="td" style="background:#F0565C"></span><span class="td" style="background:#EFA53C"></span><span class="td" style="background:#5BC48B"></span><span class="tt">any mcp client — pgtriage</span></div>
+  <div class="tbody">
+    <div class="prompt"><span class="caret">›</span> audit my database</div>
+    <div style="font-size:11px;letter-spacing:.14em;color:#5A6778;margin:8px 0 2px">AUDIT RESULT</div>
+    <div class="sum" style="margin-top:2px">scanned <span class="n">283 tables</span> · found <span class="bad">147 issues</span></div>
+    <div class="sevrow"><span class="badge b-crit">CRITICAL</span>connection pressure at 99%<span class="cnt">1</span></div>
+    <div class="sevrow"><span class="badge b-med">MEDIUM</span>duplicate indexes<span class="cnt">19</span></div>
+    <div class="sevrow"><span class="badge b-low">LOW</span>unused indexes<span class="cnt">64</span></div>
+    <div class="more">+ 63 more across 7 categories</div>
+    <div class="fixblk">
+      <div class="fctx">unused_index · table "orders" · low</div>
+      <div class="fsql">DROP INDEX CONCURRENTLY<br>idx_orders_customer;</div>
+      <div class="fadv">suggested fix</div>
+    </div>
+  </div>
+ </div>
+</div>
+<div class="footer"><span class="repo">↗ github.com/pgtriage/pgtriage</span><span>$ pip install pgtriage&nbsp;&nbsp;·&nbsp;&nbsp;MIT</span></div>
+</body></html>

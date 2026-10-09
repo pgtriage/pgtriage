@@ -1,0 +1,285 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>pgtriage v6 square</title>
+<style>
+@font-face { font-family:'JetBrains Mono'; src:url('fonts/fontsource-jetbrains-mono-5.3.0/files/jetbrains-mono-latin-400-normal.woff2') format('woff2'); font-weight:400; }
+@font-face { font-family:'JetBrains Mono'; src:url('fonts/fontsource-jetbrains-mono-5.3.0/files/jetbrains-mono-latin-500-normal.woff2') format('woff2'); font-weight:500; }
+@font-face { font-family:'JetBrains Mono'; src:url('fonts/fontsource-jetbrains-mono-5.3.0/files/jetbrains-mono-latin-700-normal.woff2') format('woff2'); font-weight:700; }
+@font-face { font-family:'JetBrains Mono'; src:url('fonts/fontsource-jetbrains-mono-5.3.0/files/jetbrains-mono-latin-800-normal.woff2') format('woff2'); font-weight:800; }
+@font-face { font-family:'Inter'; src:url('fonts/fontsource-inter-5.3.0/files/inter-latin-400-normal.woff2') format('woff2'); font-weight:400; }
+@font-face { font-family:'Inter'; src:url('fonts/fontsource-inter-5.3.0/files/inter-latin-600-normal.woff2') format('woff2'); font-weight:600; }
+
+:root{
+  --bg:#0A0F16; --panel:#101927; --line:#1D2A3B; --line2:#223145;
+  --text:#E9EEF5; --muted:#7E8CA0; --dim:#5A6778;
+  --blue:#5FA8E8; --blue-deep:#336791;
+  --crit:#F0565C; --high:#EFA53C; --med:#D9C34A; --green:#5BC48B;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1280px;height:720px;overflow:hidden;background:var(--bg);font-family:'Inter',sans-serif;color:var(--text)}
+#stage{position:absolute;inset:0}
+.grid{position:absolute;inset:0;opacity:.14;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:48px 48px;
+  mask-image:radial-gradient(ellipse 80% 70% at 50% 42%,#000 30%,transparent 78%);
+  -webkit-mask-image:radial-gradient(ellipse 80% 70% at 50% 42%,#000 30%,transparent 78%)}
+.glow{position:absolute;width:900px;height:640px;left:190px;top:-60px;
+  background:radial-gradient(ellipse at center,rgba(51,103,145,.26),transparent 62%)}
+
+.scene{position:absolute;inset:0;opacity:0}
+
+/* caption */
+#cap{position:absolute;left:0;right:0;bottom:56px;text-align:center;font-size:30px;font-weight:600;color:var(--text);opacity:0;letter-spacing:-.01em}
+#cap .mono{font-family:'JetBrains Mono',monospace;color:var(--blue);font-weight:500}
+
+/* shared node styles */
+.node{position:absolute;font-family:'JetBrains Mono',monospace;font-weight:500;border:1px solid var(--line2);
+  background:var(--panel);border-radius:10px;display:flex;align-items:center;gap:10px;justify-content:center;white-space:nowrap}
+.dot{width:9px;height:9px;border-radius:50%}
+.hero-node{border-color:rgba(95,168,232,.6);color:var(--blue);box-shadow:0 0 28px rgba(51,103,145,.45)}
+
+/* SCENE 1/2: flow */
+#pills{position:absolute;left:120px;top:200px;display:flex;gap:14px}
+.bicon{width:16px;height:16px;flex:none}
+.gly{font-weight:700;font-size:14px;letter-spacing:-1px}
+.pill span:last-child{color:#C4CFDD}
+.pill{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:500;color:#C4CFDD;border:1px solid var(--line2);
+  background:var(--panel);border-radius:8px;padding:10px 16px;display:flex;align-items:center;gap:8px}
+#term{position:absolute;left:120px;top:290px;width:520px;height:160px;background:linear-gradient(180deg,#101927,#0D141F);
+  border:1px solid var(--line2);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.55)}
+#term .bar{height:42px;display:flex;align-items:center;padding:0 16px;gap:8px;border-bottom:1px solid #1C293A}
+#term .bar span{width:12px;height:12px;border-radius:50%}
+#term .title{margin-left:10px;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--muted);white-space:nowrap}
+#prompt{padding:24px 24px;font-family:'JetBrains Mono',monospace;font-size:24px;color:var(--text)}
+#prompt .caret{color:var(--blue);font-weight:700}
+#cursor{display:inline-block;width:13px;height:26px;background:var(--blue);vertical-align:-3px;margin-left:2px}
+
+#pgnode{width:220px;height:66px;font-size:20px;left:990px;top:337px}
+#tri{width:200px;height:66px;font-size:21px;left:700px;top:337px;}
+
+#connL{position:absolute;left:644px;top:369px;height:2px;background:#3A4E68;transform-origin:left}
+#connR{position:absolute;left:904px;top:369px;height:2px;background:#3A4E68;transform-origin:left}
+#rolabel{position:absolute;left:905px;top:381px;width:80px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--green);white-space:nowrap}
+#lock{position:absolute;left:928px;top:343px;font-size:15px;color:var(--green);font-family:'JetBrains Mono',monospace}
+.pt{position:absolute;width:7px;height:7px;border-radius:50%;background:var(--blue);box-shadow:0 0 8px rgba(95,168,232,.8);top:366px}
+
+/* SCENE 3: findings */
+#findings{position:absolute;left:280px;top:150px;width:720px;background:linear-gradient(180deg,#101927,#0D141F);
+  border:1px solid var(--line2);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.55);padding:30px 34px 28px}
+#eyebrow{font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:.16em;color:var(--muted);margin-bottom:10px}
+#counter{font-family:'JetBrains Mono',monospace;font-size:26px;color:var(--text);margin-bottom:20px}
+.b-low{background:rgba(143,163,188,.10);color:#8FA3BC;border:1px solid rgba(143,163,188,.3)}
+#advnote{font-family:'JetBrains Mono',monospace;font-size:13.5px;color:var(--dim);margin-top:10px}
+#counter .n{color:var(--blue);font-weight:700}
+#counter .bad{color:var(--crit);font-weight:700}
+.sevrow{display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:18px;padding:10px 0;color:#A9B6C7}
+.badge{font-size:13px;font-weight:700;letter-spacing:.08em;border-radius:5px;padding:3px 10px}
+.b-crit{background:rgba(240,86,92,.14);color:var(--crit);border:1px solid rgba(240,86,92,.4)}
+.b-high{background:rgba(239,165,60,.13);color:var(--high);border:1px solid rgba(239,165,60,.4)}
+.b-med{background:rgba(217,195,74,.11);color:var(--med);border:1px solid rgba(217,195,74,.35)}
+.cnt{margin-left:auto;color:var(--muted)}
+#fix{overflow:hidden;border-top:1px solid #1C293A;margin-top:8px}
+#fixinner{padding-top:18px;font-family:'JetBrains Mono',monospace}
+#fixctx{font-size:14px;color:var(--muted);margin-bottom:12px}
+#sqlbig{font-size:23px;font-weight:700;letter-spacing:-.01em;line-height:1.3}
+#sqlcursor{display:inline-block;width:11px;height:24px;background:var(--green);vertical-align:-3px;margin-left:3px}
+#fixinner .k{color:#7FA7CC}.punc{color:#54657C}.s{color:#CFE3F5}.sqlfix{color:var(--green)}
+
+/* SCENE 4: endcard */
+#endcard{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px}
+#wordmark{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:110px;letter-spacing:-.04em;line-height:1}
+#wordmark .pg{color:var(--blue)}
+#pipline{font-family:'JetBrains Mono',monospace;font-size:26px;color:var(--text);background:rgba(95,168,232,.08);
+  border:1px solid rgba(95,168,232,.3);border-radius:8px;padding:12px 24px}
+#pipline .d{color:var(--muted)}
+#ghline{font-family:'JetBrains Mono',monospace;font-size:21px;color:var(--muted)}
+#oss{font-family:'JetBrains Mono',monospace;font-size:15px;letter-spacing:.14em;color:var(--blue)}
+#fade{position:absolute;inset:0;background:var(--bg);opacity:0}
+/* Square recomposition; original tokens and 16-second timeline retained. */
+html,body{width:100%;height:auto;overflow:auto}body{padding:24px;background:#080c12}
+#layout{display:grid;grid-template-columns:minmax(0,720px) 280px;gap:30px;max-width:1050px;margin:auto}#frame{position:relative;width:100%;aspect-ratio:1;overflow:hidden}#stage{inset:auto;left:0;top:0;width:1080px;height:1080px;transform-origin:top left;background:var(--bg)}
+#controls{padding-top:24px;font-family:Inter,sans-serif}#controls h1{font-size:27px;margin:16px 0}#controls p{line-height:1.6;color:var(--muted);font-size:14px;margin:16px 0}button{background:var(--panel);color:var(--text);border:1px solid var(--line2);padding:12px 16px;cursor:pointer;margin:6px 4px 10px 0}input{width:100%;accent-color:var(--blue)}label{font-size:13px}#pills{left:80px;top:112px;width:920px;justify-content:center;gap:12px}.pill{font-size:23px;padding:12px 17px}.dot{width:12px;height:12px}
+#term{left:110px;top:210px;width:860px;height:184px}#term .bar{height:51px}#term .title{font-size:21px}#prompt{font-size:39px;padding:29px}#cursor{height:42px;width:20px}
+#tri{left:365px;top:485px;width:350px;height:92px;font-size:35px}#pgnode{left:350px;top:715px;width:380px;height:92px;font-size:35px}
+#connL{left:539px;top:395px;width:2px!important;height:89px}#connR{left:539px;top:579px;width:2px!important;height:134px}#rolabel{left:573px;top:646px;width:170px;font-size:23px}#lock{left:483px;top:625px;font-size:21px}.pt{width:10px;height:10px;left:535px!important}
+#cap{bottom:102px;font-size:39px;padding:0 50px}.glow{left:90px;top:170px}
+#findings{left:65px;top:160px;width:950px;padding:35px 35px 30px}#eyebrow{font-size:21px}#counter{font-size:32px;margin-bottom:28px}.sevrow{font-size:25px;gap:17px;padding:17px 0}.badge{font-size:20px;padding:5px 11px}.cnt{display:none}#fixinner{font-size:21px;line-height:1.85}#sqltyped{font-size:22px;white-space:normal;overflow-wrap:normal}#advnote{font-size:18px;color:var(--muted)}#wordmark{font-size:132px}#pipline{font-size:35px}#ghline{font-size:29px}#oss{font-size:22px}#endcard{gap:37px}
+@media(max-width:800px){body{padding:12px}#layout{display:block}#controls{padding:10px 6px;max-width:650px}}
+
+#findings{top:140px}#fixinner{font-size:24px;padding-top:22px}#fixctx{font-size:23px;margin-bottom:18px}#sqlbig{font-size:39px;line-height:1.45;font-weight:700}#sqltyped{font-size:inherit;white-space:normal;overflow-wrap:normal}#sqlcursor{width:18px;height:40px}#r4{font-size:22px!important;padding-top:12px!important}#advnote{font-size:22px;margin-top:18px}.cnt{display:block}#counter{font-size:29px}#cap{font-size:37px}#source-note{font-size:12px}
+</style>
+</head>
+<body><div id="layout"><div id="frame">
+<div id="stage">
+<div class="grid"></div><div class="glow"></div>
+
+<div class="scene" id="s1">
+  <div id="pills">
+    <div class="pill" style="opacity:0;color:#D97757"><svg class="bicon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 10.5h3v3h-3v3h-1.5v3H18v-3h-1.5v3H15v-3H9v3H7.5v-3H6v3H4.5v-3H3v-3H0v-3h3v-6h18Zm-15 0h1.5v-3H6Zm10.5 0H18v-3h-1.5z"/></svg><span>Claude Code</span></div>
+    <div class="pill" style="opacity:0;color:#A9B2BE"><span class="gly">›_</span><span>Codex</span></div>
+    <div class="pill" style="opacity:0;color:#C4CDD8"><svg class="bicon" viewBox="0 0 24 24" fill="currentColor"><path d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23"/></svg><span>Cursor</span></div>
+    <div class="pill" style="opacity:0;color:#4FC3A1"><svg class="bicon" viewBox="0 0 24 24" fill="currentColor"><path d="M23.55 5.067c-1.2038-.002-2.1806.973-2.1806 2.1765v4.8676c0 .972-.8035 1.7594-1.7597 1.7594-.568 0-1.1352-.286-1.4718-.7659l-4.9713-7.1003c-.4125-.5896-1.0837-.941-1.8103-.941-1.1334 0-2.1533.9635-2.1533 2.153v4.8957c0 .972-.7969 1.7594-1.7596 1.7594-.57 0-1.1363-.286-1.4728-.7658L.4076 5.1598C.2822 4.9798 0 5.0688 0 5.2882v4.2452c0 .2147.0656.4228.1884.599l5.4748 7.8183c.3234.462.8006.8052 1.3509.9298 1.3771.313 2.6446-.747 2.6446-2.0977v-4.893c0-.972.7875-1.7593 1.7596-1.7593h.003a1.798 1.798 0 0 1 1.4718.7658l4.9723 7.0994c.4135.5905 1.05.941 1.8093.941 1.1587 0 2.1515-.9645 2.1515-2.153v-4.8948c0-.972.7875-1.7594 1.7596-1.7594h.194a.22.22 0 0 0 .2204-.2202v-4.622a.22.22 0 0 0-.2203-.2203Z"/></svg><span>Windsurf</span></div>
+  </div>
+  <div id="term">
+    <div class="bar"><span style="background:#F0565C"></span><span style="background:#EFA53C"></span><span style="background:#5BC48B"></span><span class="title">any mcp client</span></div>
+    <div id="prompt"><span class="caret">›</span> <span id="typed"></span><span id="cursor"></span></div>
+  </div>
+  <div class="node" id="tri" style="opacity:0"><span class="dot" style="background:var(--blue)"></span>pgtriage</div>
+  <div id="connL" style="width:0"></div>
+  <div id="connR" style="width:0"></div>
+  <div class="node" id="pgnode" style="opacity:0"><span class="dot" style="background:var(--blue-deep)"></span>PostgreSQL</div>
+  <div id="rolabel" style="opacity:0">read-only</div>
+  <div id="lock" style="opacity:0">[ro]</div>
+  <div class="pt" id="p1" style="opacity:0"></div>
+  <div class="pt" id="p2" style="opacity:0"></div>
+  <div class="pt" id="p3" style="opacity:0"></div>
+</div>
+
+<div class="scene" id="s3">
+  <div id="findings">
+    <div id="eyebrow">AUDIT RESULT</div>
+    <div id="counter">scanned <span class="n" id="ctab">0 tables</span> · found <span class="bad" id="cfind">0 issues</span></div>
+    <div class="sevrow" id="r1" style="opacity:0"><span class="badge b-crit">CRITICAL</span>connection pressure at 99%<span class="cnt">1</span></div>
+    <div class="sevrow" id="r2" style="opacity:0"><span class="badge b-med">MEDIUM</span>duplicate indexes<span class="cnt">19</span></div>
+    <div class="sevrow" id="r3" style="opacity:0"><span class="badge b-low">LOW</span>unused indexes<span class="cnt">64</span></div>
+    <div id="r4" style="opacity:0;font-family:'JetBrains Mono',monospace;font-size:15px;color:var(--dim);padding:6px 0 2px">+ 63 more across 7 categories</div>
+    <div id="fix" style="height:0;opacity:0"><div id="fixinner">
+      <div id="fixctx">unused_index · table "orders" · low</div>
+      <div id="sqlbig"><span class="sqlfix" id="sqltyped"></span><span id="sqlcursor"></span></div>
+      <div id="advnote">suggested fix</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="scene" id="s4">
+  <div id="endcard">
+    <div id="oss" style="opacity:0">OPEN SOURCE · MCP SERVER FOR POSTGRESQL</div>
+    <div id="wordmark" style="opacity:0"><span class="pg">pg</span>triage</div>
+    <div id="pipline" style="opacity:0"><span class="d">$</span> pip install pgtriage</div>
+    <div id="ghline" style="opacity:0">github.com/pgtriage/pgtriage</div>
+  </div>
+</div>
+
+<div id="cap"></div>
+<div id="fade"></div>
+</div>
+
+</div><aside id="controls"><div>PGTRIAGE / V6 SQUARE</div><h1>One source.<br>Two compositions.</h1><p>V6 data and timing preserved. The SQL completes at 11.3 seconds; the findings fade begins at 12.6 seconds.</p><button id="play">Play</button><button id="restart">Restart</button><div><button data-time="5.6">Safety</button><button data-time="11.5">SQL fix</button><button data-time="14.9">Close</button></div><p><label for="scrub">Time <span id="time">0.0</span> / 16s</label></p><input id="scrub" type="range" min="0" max="15.999" step="0.01" value="0"><p id="source-note">Source: pgtriage_demo.html, supplied v6.</p></aside></div><script>
+const $=id=>document.getElementById(id);
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const lerp=(a,b,t)=>a+(b-a)*t;
+// progress of t within [a,b], eased
+const seg=(t,a,b)=>clamp((t-a)/(b-a),0,1);
+const easeOut=x=>1-Math.pow(1-x,3);
+const easeIn=x=>x*x*x;
+const easeIO=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+
+const PROMPT="audit my database";
+const SQL='DROP INDEX CONCURRENTLY idx_orders_customer;';
+const CAPS=[
+ {a:0.5,b:3.1,html:'Ask your AI to audit PostgreSQL'},
+ {a:3.4,b:6.3,html:'Read-only by design'},
+ {a:6.7,b:12.6,html:'Severity · evidence · suggested fixes'},
+ {a:13.2,b:15.6,html:'<span class="mono">pgtriage</span> · open source'}
+];
+const DUR=16.0;
+
+function seek(t){
+  t=((t%DUR)+DUR)%DUR;
+  // scene opacities
+  const s12=seg(t,0,.4)*(1-easeIn(seg(t,6.0,6.6)));
+  $('s1').style.opacity=s12;
+  $('s3').style.opacity=easeOut(seg(t,6.4,7.0))*(1-easeIn(seg(t,12.6,13.2)));
+  $('s4').style.opacity=easeOut(seg(t,13.0,13.6));
+  // final fade to bg for loop
+  $('fade').style.opacity=easeIn(seg(t,15.3,16.0));
+
+  // caption
+  let capHtml='',capOp=0;
+  for(const c of CAPS){
+    if(t>=c.a-0.3&&t<=c.b+0.3){capHtml=c.html;capOp=easeOut(seg(t,c.a,c.a+.35))*(1-easeIn(seg(t,c.b-.2,c.b+.3)));}
+  }
+  $('cap').innerHTML=capHtml;$('cap').style.opacity=capOp;
+
+  // --- scene 1: typing + pills + pg node ---
+  const pills=document.querySelectorAll('#pills .pill');
+  pills.forEach((p,i)=>{const pr=easeOut(seg(t,.2+i*.18,.7+i*.18));p.style.opacity=pr;p.style.transform=`translateY(${lerp(10,0,pr)}px)`;});
+  const typeN=Math.floor(seg(t,.8,2.4)*PROMPT.length);
+  $('typed').textContent=PROMPT.slice(0,typeN);
+  $('cursor').style.opacity=(t<6&&Math.floor(t*2.4)%2===0)?1:(t<6?0.15:0);
+  const pgIn=easeOut(seg(t,1.4,2.2));
+  $('pgnode').style.opacity=pgIn;$('pgnode').style.transform=`translateX(${lerp(40,0,pgIn)}px)`;
+
+  // --- scene 2: pgtriage + connections + read-only + particles ---
+  const triIn=easeOut(seg(t,3.2,3.9));
+  $('tri').style.opacity=triIn;$('tri').style.transform=`scale(${lerp(.85,1,triIn)})`;
+  $('connL').style.width=lerp(0,52,easeOut(seg(t,3.8,4.3)))+'px';
+  $('connR').style.width=lerp(0,82,easeOut(seg(t,4.0,4.5)))+'px';
+  const roIn=easeOut(seg(t,4.3,4.9));
+  $('rolabel').style.opacity=roIn;$('lock').style.opacity=roIn;
+  // particles flow PostgreSQL -> pgtriage (evidence outward)
+  // request pulse in (left -> right), once
+  const uq=easeIO(seg(t,4.6,5.1));
+  $('p1').style.left=lerp(910,982,uq)+'px';
+  $('p1').style.opacity=(t>4.6&&t<5.15)?1:( t>=5.15? evFor(t,0):0 );
+  function evFor(tt,ph){const vis=seg(tt,5.2,5.5)*(1-seg(tt,5.9,6.3));const u=((tt*0.9+ph)%1);return vis*(u<.08||u>.92?0:1);}
+  // evidence pulses back (right -> left), looping
+  [['p2',.2],['p3',.6]].forEach(([id,ph])=>{
+    const vis=seg(t,5.2,5.5)*(1-seg(t,5.9,6.3));
+    const u=((t*0.9+ph)%1);
+    $(id).style.opacity=vis*(u<.08||u>.92?0:1);
+    $(id).style.left=lerp(982,910,u)+'px';
+  });
+  if(t>=5.15){const u1=((t*0.9)%1);$('p1').style.left=lerp(982,910,u1)+'px';}
+
+  // --- scene 3: counter, rows, fix ---
+  const cu=easeOut(seg(t,6.8,8.2));
+  $('ctab').textContent=Math.round(lerp(0,283,cu))+' tables';
+  $('cfind').textContent=Math.round(lerp(0,147,cu))+' issues';
+  [['r1',8.2],['r2',8.6],['r3',9.0],['r4',9.35]].forEach(([id,at])=>{
+    const pr=easeOut(seg(t,at,at+.5));
+    $(id).style.opacity=pr;$(id).style.transform=`translateX(${lerp(-14,0,pr)}px)`;
+  });
+  const fx=easeIO(seg(t,9.6,10.2));
+  $('fix').style.height=lerp(0,128,fx)+'px';$('fix').style.opacity=fx;
+  const sqlN=Math.floor(seg(t,10.2,11.3)*SQL.length);
+  $('sqltyped').textContent=SQL.slice(0,sqlN);
+  $('sqlcursor').style.opacity=(fx>0.5&&t<12.4&&Math.floor(t*2.4)%2===0)?1:0;
+  // highlight the unused-index row while expanded
+  $('r3').style.background=`rgba(143,163,188,${0.06*fx})`;
+
+  // --- scene 4: endcard ---
+  [['oss',13.2],['wordmark',13.4],['pipline',13.9],['ghline',14.3]].forEach(([id,at])=>{
+    const pr=easeOut(seg(t,at,at+.5));
+    $(id).style.opacity=pr;$(id).style.transform=`translateY(${lerp(12,0,pr)}px)`;
+  });
+}
+window.seek=seek;
+seek(0);
+</script>
+
+<script>
+// Layout adapter only: the canonical seek(t) script above is unchanged.
+const sourceSeek=window.seek;
+window.seek=function(t){
+ sourceSeek(t);t=((t%DUR)+DUR)%DUR;
+ $('connL').style.width='2px';$('connL').style.height=lerp(0,89,easeOut(seg(t,3.8,4.3)))+'px';
+ $('connR').style.width='2px';$('connR').style.height=lerp(0,134,easeOut(seg(t,4.0,4.5)))+'px';
+ const request=easeIO(seg(t,4.6,5.1));$('p1').style.top=lerp(583,704,request)+'px';
+ [['p2',.2],['p3',.6]].forEach(([id,ph])=>{$(id).style.top=lerp(704,583,((t*.9+ph)%1))+'px'});
+ if(t>=5.15)$('p1').style.top=lerp(704,583,((t*.9)%1))+'px';
+ $('fix').style.height=lerp(0,300,easeIO(seg(t,9.6,10.2)))+'px';
+};
+let current=0,playing=false,last=0;
+function update(){window.seek(current);$('time').textContent=current.toFixed(1);$('scrub').value=current}
+$('play').onclick=()=>{playing=!playing;last=0;$('play').textContent=playing?'Pause':'Play'};
+$('restart').onclick=()=>{playing=false;current=0;update();$('play').textContent='Play'};
+$('scrub').oninput=e=>{playing=false;current=Number(e.target.value);update();$('play').textContent='Play'};
+document.querySelectorAll('[data-time]').forEach(b=>b.onclick=()=>{playing=false;current=Number(b.dataset.time);update();$('play').textContent='Play'});
+function tick(now){if(playing){if(last)current=(current+(now-last)/1000)%DUR;update()}last=now;requestAnimationFrame(tick)}
+new ResizeObserver(()=>{$('stage').style.transform=`scale(${$('frame').clientWidth/1080})`}).observe($('frame'));
+document.fonts.ready.then(update);requestAnimationFrame(tick);
+</script>
+</body>
+</html>
