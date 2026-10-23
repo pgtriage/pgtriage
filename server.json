@@ -3,12 +3,12 @@
   "name": "io.github.pgtriage/pgtriage",
   "title": "pgtriage",
   "description": "Read-only MCP server for evidence-based PostgreSQL performance auditing.",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "pgtriage",
-      "version": "0.1.4",
+      "version": "0.2.0",
       "transport": {
         "type": "stdio"
       }
