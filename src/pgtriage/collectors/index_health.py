@@ -1,5 +1,10 @@
 """Collect index health metrics from PostgreSQL system views."""
 
+from collections import defaultdict
+from typing import Any
+
+import psycopg
+
 from pgtriage.connection import ConnectionManager
 
 UNUSED_INDEXES_QUERY = """
@@ -23,25 +28,81 @@ ORDER BY pg_relation_size(s.indexrelid) DESC
 """
 
 DUPLICATE_INDEXES_QUERY = """
-SELECT
-    a.indrelid::regclass AS table_name,
-    a.indexrelid::regclass AS index_1,
-    b.indexrelid::regclass AS index_2,
-    pg_get_indexdef(a.indexrelid) AS index_1_def,
-    pg_get_indexdef(b.indexrelid) AS index_2_def,
-    pg_size_pretty(pg_relation_size(a.indexrelid)) AS index_1_size,
-    pg_size_pretty(pg_relation_size(b.indexrelid)) AS index_2_size,
-    pg_relation_size(a.indexrelid) AS index_1_size_bytes,
-    pg_relation_size(b.indexrelid) AS index_2_size_bytes
-FROM pg_index a
-JOIN pg_index b ON a.indrelid = b.indrelid
-    AND a.indexrelid < b.indexrelid
-    AND a.indkey::text = b.indkey::text
-JOIN pg_namespace n ON n.oid = (
-    SELECT relnamespace FROM pg_class WHERE oid = a.indrelid
+WITH index_data AS (
+    SELECT
+        indexes.indrelid AS table_oid,
+        table_ns.nspname AS schema_name,
+        tbl.relname AS table_name,
+        index_ns.nspname AS index_schema_name,
+        idx.relname AS index_name,
+        idx.relkind AS index_relkind,
+        access_method.amname AS access_method,
+        indexes.indkey::text AS indkey,
+        indexes.indoption::text AS indoption,
+        indexes.indclass::text AS indclass,
+        indexes.indcollation::text AS indcollation,
+        indexes.indnkeyatts,
+        COALESCE(pg_get_expr(indexes.indexprs, indexes.indrelid, false), '') AS index_expression,
+        COALESCE(pg_get_expr(indexes.indpred, indexes.indrelid, false), '') AS index_predicate,
+        pg_get_indexdef(indexes.indexrelid) AS index_definition,
+        pg_size_pretty(pg_relation_size(indexes.indexrelid)) AS index_size,
+        pg_relation_size(indexes.indexrelid) AS index_size_bytes,
+        COALESCE(stats.idx_scan, 0) AS idx_scan,
+        indexes.indisprimary AS is_primary,
+        indexes.indisunique AS is_unique,
+        indexes.indisexclusion AS is_exclusion,
+        indexes.indisreplident AS is_replica_identity,
+        indexes.indisclustered AS is_clustered,
+        indexes.indisvalid AS is_valid,
+        indexes.indisready AS is_ready,
+        indexes.indislive AS is_live,
+        EXISTS (
+            SELECT 1
+            FROM pg_constraint constraints
+            WHERE constraints.conindid = indexes.indexrelid
+        ) AS is_constraint_backed,
+        database_stats.stats_reset AS statistics_reset_at
+    FROM pg_index indexes
+    JOIN pg_class tbl ON tbl.oid = indexes.indrelid
+    JOIN pg_namespace table_ns ON table_ns.oid = tbl.relnamespace
+    JOIN pg_class idx ON idx.oid = indexes.indexrelid
+    JOIN pg_namespace index_ns ON index_ns.oid = idx.relnamespace
+    JOIN pg_am access_method ON access_method.oid = idx.relam
+    LEFT JOIN pg_stat_user_indexes stats ON stats.indexrelid = indexes.indexrelid
+    LEFT JOIN pg_stat_database database_stats
+        ON database_stats.datname = current_database()
+    WHERE table_ns.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND (%s::text IS NULL OR table_ns.nspname = %s)
+), duplicate_data AS (
+    SELECT
+        index_data.*,
+        COUNT(*) OVER (
+            PARTITION BY
+                table_oid,
+                access_method,
+                indkey,
+                indoption,
+                indclass,
+                indcollation,
+                indnkeyatts,
+                index_expression,
+                index_predicate
+        ) AS equivalent_count
+    FROM index_data
 )
-WHERE (%s::text IS NULL OR n.nspname = %s)
-ORDER BY pg_relation_size(a.indexrelid) + pg_relation_size(b.indexrelid) DESC
+SELECT *
+FROM duplicate_data
+WHERE equivalent_count > 1
+ORDER BY schema_name, table_name, index_name
+"""
+
+REPLICATION_CONTEXT_QUERY = """
+SELECT
+    pg_is_in_recovery() AS in_recovery,
+    CASE
+        WHEN pg_is_in_recovery() THEN NULL
+        ELSE (SELECT count(*) FROM pg_stat_replication)
+    END AS visible_standbys
 """
 
 TABLES_NEEDING_INDEXES_QUERY = """
@@ -115,7 +176,73 @@ async def collect_duplicate_indexes(
     db: ConnectionManager,
     schema_name: str | None = None,
 ) -> list[dict]:
-    return await db.fetch_all(DUPLICATE_INDEXES_QUERY, (schema_name, schema_name))
+    rows = await db.fetch_all(DUPLICATE_INDEXES_QUERY, (schema_name, schema_name))
+    replication_context: dict[str, Any] = {
+        "in_recovery": None,
+        "visible_standbys": None,
+        "replication_context_available": False,
+    }
+    try:
+        context = await db.fetch_one(REPLICATION_CONTEXT_QUERY)
+        if context is not None:
+            replication_context = {
+                "in_recovery": context.get("in_recovery"),
+                "visible_standbys": context.get("visible_standbys"),
+                "replication_context_available": True,
+            }
+    except psycopg.Error:
+        pass
+
+    signature_fields = (
+        "table_oid",
+        "access_method",
+        "indkey",
+        "indoption",
+        "indclass",
+        "indcollation",
+        "indnkeyatts",
+        "index_expression",
+        "index_predicate",
+    )
+    grouped: dict[tuple[Any, ...], list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[tuple(row.get(field) for field in signature_fields)].append(row)
+
+    duplicate_groups = []
+    for signature, indexes in grouped.items():
+        if len(indexes) < 2:
+            continue
+        first = indexes[0]
+        duplicate_groups.append({
+            "schema_name": first["schema_name"],
+            "table_name": first["table_name"],
+            "statistics_reset_at": first.get("statistics_reset_at"),
+            "equivalence": dict(zip(signature_fields[1:], signature[1:], strict=True)),
+            "indexes": [
+                {
+                    "schema_name": index["index_schema_name"],
+                    "index_name": index["index_name"],
+                    "index_relkind": index["index_relkind"],
+                    "index_definition": index["index_definition"],
+                    "index_size": index["index_size"],
+                    "index_size_bytes": index["index_size_bytes"],
+                    "idx_scan": index["idx_scan"],
+                    "is_primary": index["is_primary"],
+                    "is_unique": index["is_unique"],
+                    "is_exclusion": index["is_exclusion"],
+                    "is_constraint_backed": index["is_constraint_backed"],
+                    "is_replica_identity": index["is_replica_identity"],
+                    "is_clustered": index["is_clustered"],
+                    "is_valid": index["is_valid"],
+                    "is_ready": index["is_ready"],
+                    "is_live": index["is_live"],
+                }
+                for index in indexes
+            ],
+            **replication_context,
+        })
+
+    return duplicate_groups
 
 
 async def collect_tables_needing_indexes(

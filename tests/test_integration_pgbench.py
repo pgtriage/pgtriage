@@ -90,6 +90,14 @@ def sabotaged_db():
         CREATE INDEX IF NOT EXISTS idx_junk_accounts_unused
         ON pgbench_accounts (filler);
     """)
+    _run_sql(DSN, """
+        CREATE INDEX IF NOT EXISTS idx_junk_accounts_expr_1
+        ON pgbench_accounts ((lower(filler)));
+    """)
+    _run_sql(DSN, """
+        CREATE INDEX IF NOT EXISTS idx_junk_accounts_expr_2
+        ON pgbench_accounts (( lower(filler) ));
+    """)
 
     _run_sql(DSN, """
         ALTER TABLE pgbench_history SET (autovacuum_enabled = off);
@@ -108,6 +116,8 @@ def sabotaged_db():
     _run_sql(DSN, "DROP INDEX IF EXISTS idx_junk_accounts_1;")
     _run_sql(DSN, "DROP INDEX IF EXISTS idx_junk_accounts_2;")
     _run_sql(DSN, "DROP INDEX IF EXISTS idx_junk_accounts_unused;")
+    _run_sql(DSN, "DROP INDEX IF EXISTS idx_junk_accounts_expr_1;")
+    _run_sql(DSN, "DROP INDEX IF EXISTS idx_junk_accounts_expr_2;")
     _run_sql(DSN, "ALTER TABLE pgbench_history SET (autovacuum_enabled = on);")
     _run_sql(DSN, "DROP TABLE IF EXISTS pgbench_accounts, pgbench_branches, pgbench_history, pgbench_tellers CASCADE;")
 
@@ -150,11 +160,24 @@ class TestIndexHealth:
             dupes = await collect_duplicate_indexes(db)
             return dupes
         dupes = asyncio.get_event_loop().run_until_complete(run())
-        dupe_names = []
-        for d in dupes:
-            dupe_names.extend([str(d["index_1"]), str(d["index_2"])])
+        dupe_names = [
+            str(index["index_name"])
+            for group in dupes
+            for index in group["indexes"]
+        ]
         assert any("idx_junk_accounts" in n for n in dupe_names), \
             f"Expected to find junk duplicate indexes, got: {dupe_names}"
+        expression_group = next(
+            group
+            for group in dupes
+            if any(
+                index["index_name"] == "idx_junk_accounts_expr_1"
+                for index in group["indexes"]
+            )
+        )
+        assert {
+            index["index_name"] for index in expression_group["indexes"]
+        } == {"idx_junk_accounts_expr_1", "idx_junk_accounts_expr_2"}
 
     def test_finds_unused_indexes(self, db):
         async def run():
@@ -221,7 +244,12 @@ class TestFullAudit:
                     severity=Severity.MEDIUM,
                     category=Category.DUPLICATE_INDEX,
                     table=str(d["table_name"]),
-                    detail=f"Duplicate: {d['index_1']} / {d['index_2']}",
+                    detail=(
+                        "Duplicate: "
+                        + " / ".join(
+                            index["index_name"] for index in d["indexes"]
+                        )
+                    ),
                 ))
 
             result = AuditResult.from_findings(
