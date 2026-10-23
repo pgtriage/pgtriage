@@ -1,6 +1,6 @@
 """pgtriage - MCP server for PostgreSQL performance auditing."""
 
-__version__ = "0.1.4"
+__version__ = "0.2.0"
 
 
 def main():
