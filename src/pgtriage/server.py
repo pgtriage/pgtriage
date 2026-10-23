@@ -14,6 +14,7 @@ from pgtriage.analyzers.explain import (
     plan_references_schema,
     run_explain_analyze,
 )
+from pgtriage.analyzers.index_health import analyze_duplicate_indexes
 from pgtriage.analyzers.patterns import (
     analyze_dead_tuples,
     analyze_sequential_scans,
@@ -294,27 +295,7 @@ async def check_index_health(
             evidence={"remaining_indexes": remaining_names},
         ))
 
-    for dup in duplicates:
-        findings.append(Finding(
-            severity=Severity.MEDIUM,
-            category=Category.DUPLICATE_INDEX,
-            table=str(dup["table_name"]),
-            detail=(
-                f"Duplicate indexes on '{dup['table_name']}': "
-                f"'{dup['index_1']}' ({dup['index_1_size']}) and "
-                f"'{dup['index_2']}' ({dup['index_2_size']}). "
-                f"Same column definition. One can be dropped."
-            ),
-            suggested_fix=(
-                f"-- Keep the one with more scans, drop the other:\n"
-                f"-- {dup['index_1_def']}\n"
-                f"-- {dup['index_2_def']}"
-            ),
-            evidence={
-                "index_1_def": dup["index_1_def"],
-                "index_2_def": dup["index_2_def"],
-            },
-        ))
+    findings.extend(analyze_duplicate_indexes(duplicates))
 
     for tbl in needs_indexes:
         findings.append(Finding(
