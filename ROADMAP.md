@@ -10,6 +10,8 @@ performance patterns, and return structured findings over MCP.
 - Bounded `EXPLAIN ANALYZE` with query validation, timeout, and rollback
 - Table, index, query-plan, configuration, and connection-health analysis
 - Schema-scoped audits and catalog-backed type-mismatch detection
+- Evidence-backed duplicate-index candidate selection with conservative
+  structural equivalence, protected-index exclusions, and review-only fallbacks
 - Unit, integration, pgbench, packaging, and CLI smoke tests in CI
 - PyPI and official MCP Registry publishing
 

@@ -51,12 +51,28 @@ Example audit: **283 tables scanned, 147 findings** — 1 critical connection-pr
   "severity": "medium",
   "category": "duplicate_index",
   "table": "orders",
-  "detail": "Duplicate indexes on 'orders': 'idx_orders_customer' (16 kB) and 'idx_orders_customer_copy' (16 kB). Same column definition. One can be dropped.",
-  "suggested_fix": "-- Keep the one with more scans, drop the other:\n-- CREATE INDEX idx_orders_customer ON orders (customer_id)\n-- CREATE INDEX idx_orders_customer_copy ON orders (customer_id)",
+  "detail": "Structurally equivalent indexes on 'public.orders': 'public.idx_orders_customer' (2 GB, 18,420 scans), 'public.idx_orders_customer_copy' (2.1 GB, 12 scans). 'public.idx_orders_customer' has the uniquely highest recorded scan count; the remaining eligible indexes are drop candidates subject to workload review.",
+  "suggested_fix": "Review every compared definition, current and periodic workload, and replica usage before considering:\nDROP INDEX CONCURRENTLY \"public\".\"idx_orders_customer_copy\";\nDROP INDEX CONCURRENTLY cannot run inside a transaction block.",
   "safe_to_apply": false,
   "evidence": {
-    "index_1_def": "CREATE INDEX idx_orders_customer ON orders (customer_id)",
-    "index_2_def": "CREATE INDEX idx_orders_customer_copy ON orders (customer_id)"
+    "structurally_equivalent": true,
+    "statistics_reset_at": "2026-10-01T00:00:00+00:00",
+    "minimum_statistics_age_days": 7,
+    "keep_index": {
+      "qualified_name": "public.idx_orders_customer",
+      "scans": 18420,
+      "size": "2 GB",
+      "definition": "CREATE INDEX idx_orders_customer ON public.orders USING btree (customer_id)"
+    },
+    "drop_candidates": [
+      {
+        "qualified_name": "public.idx_orders_customer_copy",
+        "scans": 12,
+        "size": "2.1 GB",
+        "definition": "CREATE INDEX idx_orders_customer_copy ON public.orders USING btree (customer_id)",
+        "sql": "DROP INDEX CONCURRENTLY \"public\".\"idx_orders_customer_copy\";"
+      }
+    ]
   }
 }
 ```
@@ -144,7 +160,12 @@ Analyze dead tuples, autovacuum stats, sequential scan ratios, and TOAST bloat. 
 Pull the slowest queries from `pg_stat_statements`, inspect their execution plans, and detect patterns like indexed-column type casts, sequential scans, stale statistics, and N+1 queries. An optional `schema_name` filter uses verbose execution-plan metadata rather than parsing SQL text. Literal queries use bounded `EXPLAIN ANALYZE`; normalized queries containing placeholders use a non-executing generic plan.
 
 ### `check_index_health`
-Find unused indexes (zero scans), duplicate indexes (same column definition), and tables that likely need indexes based on scan patterns. Optionally scope the analysis to one user schema.
+Find unused indexes, structurally equivalent duplicate-index groups, and tables
+that likely need indexes based on scan patterns. Duplicate findings preserve the
+compared definitions, sizes, and scan counts. pgtriage names a review candidate
+only when statistics are mature, one keeper has the uniquely highest scan count,
+and the candidate is not protected by a constraint or operational role.
+Optionally scope the analysis to one user schema.
 
 ### `check_config`
 Review PostgreSQL settings (`shared_buffers`, `work_mem`, `autovacuum_vacuum_scale_factor`, `random_page_cost`, etc.) and flag suboptimal values. Checks connection utilization and long-running queries.
