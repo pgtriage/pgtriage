@@ -49,6 +49,18 @@ class ConnectionManager:
         row = await self.fetch_one("SELECT version() AS version")
         return row["version"] if row else "unknown"
 
+    async def get_statistics_reset_at(self) -> str | None:
+        row = await self.fetch_one(
+            """
+            SELECT stats_reset
+            FROM pg_stat_database
+            WHERE datname = current_database()
+            """
+        )
+        if not row or row.get("stats_reset") is None:
+            return None
+        return str(row["stats_reset"])
+
     async def has_extension(self, name: str) -> bool:
         row = await self.fetch_one(
             "SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = %s) AS available",

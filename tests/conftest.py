@@ -36,6 +36,9 @@ class MockConnectionManager:
     async def get_server_version(self):
         return "PostgreSQL 15.4"
 
+    async def get_statistics_reset_at(self):
+        return self._responses.get("statistics_reset_at")
+
 
 @pytest.fixture
 def mock_db():

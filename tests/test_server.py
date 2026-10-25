@@ -7,6 +7,14 @@ from pgtriage import server
 from pgtriage.server import app_lifespan
 
 
+@pytest.fixture(autouse=True)
+def isolated_audit_store(monkeypatch, tmp_path):
+    monkeypatch.setenv(
+        "PGTRIAGE_AUDIT_STORE_PATH",
+        str(tmp_path / "audit-runs.sqlite3"),
+    )
+
+
 @pytest.mark.asyncio
 async def test_lifespan_uses_pgtriage_connection_string(monkeypatch, capsys):
     dsn = "postgresql://reader:new@localhost/db"
@@ -68,6 +76,7 @@ async def test_mcp_tools_publish_accurate_safety_annotations():
         "check_index_health",
         "check_config",
         "full_audit",
+        "get_audit_run",
     }
 
     for tool in tools.values():
@@ -75,7 +84,12 @@ async def test_mcp_tools_publish_accurate_safety_annotations():
         assert tool.annotations.readOnlyHint is True
         assert tool.annotations.destructiveHint is False
 
-    for name in ("check_table_health", "check_index_health", "check_config"):
+    for name in (
+        "check_table_health",
+        "check_index_health",
+        "check_config",
+        "get_audit_run",
+    ):
         assert tools[name].annotations.idempotentHint is True
 
     for name in ("analyze_slow_queries", "full_audit"):

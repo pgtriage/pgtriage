@@ -28,6 +28,7 @@ a human-controlled change process approves it.
 | `check_config` | yes | no | yes | Reads configuration and connection statistics |
 | `analyze_slow_queries` | yes | no | no | May run bounded `EXPLAIN ANALYZE`; retries consume resources and results can change |
 | `full_audit` | yes | no | no | Includes slow-query analysis |
+| `get_audit_run` | yes | no | yes | Reads durable operation state and never starts diagnostic work |
 
 The server also enforces a read-only database session. Slow-query analysis
 accepts only validated `SELECT` statements, applies a statement timeout, and
@@ -65,6 +66,8 @@ request validation
   -> intent classification
   -> typed tool plan validation
   -> execution-time authorization
+  -> persist a client-generated audit run UUID
+  -> reconcile that UUID before dispatch
   -> pgtriage MCP call
   -> evidence schema validation
   -> runbook retrieval
@@ -82,7 +85,25 @@ constraints, replicas, and operational runbooks.
 
 ## Retry Guidance
 
-Retries should depend on the failure class:
+`full_audit` accepts an optional `audit_run_id`. A durable runtime should create
+and persist a UUID before dispatch, then send it on every attempt. pgtriage binds
+the ID to the database target, schema scope, slow-query limit, and detector
+contract. Reusing an ID with a different binding fails closed.
+
+Before dispatch, and after any timeout or transport failure whose dispatch status
+is unknown, call `get_audit_run` with that ID:
+
+- `NOT_FOUND`: no operation was committed; a bounded dispatch is safe;
+- `STARTED`: do not replay; wait within policy or route to human review;
+- `COMPLETED`: recover and validate the retained result;
+- `FAILED`: persist the bounded failure and require explicit retry policy;
+- `EXPIRED`: require a deliberate rerun with a new ID; and
+- `CONFLICT`: stop because the ID is bound to different work.
+
+If reconciliation is unreachable or malformed, fail closed. Do not infer that
+the audit failed merely because its MCP response was lost.
+
+Other retries should still depend on the failure class:
 
 - retry transient transport failures within explicit budgets;
 - do not retry invalid arguments or denied authorization;
@@ -91,6 +112,8 @@ Retries should depend on the failure class:
 - persist a tool-result hash before synthesis when durable recovery matters;
 - never infer completion solely from a successful model response.
 
-The same idempotency key should resolve to the existing terminal workflow in a
-durable agent runtime. That workflow-level guarantee is owned by the runtime,
-not by pgtriage.
+The workflow idempotency key and pgtriage audit run ID solve different problems.
+The former deduplicates one logical client workflow; the latter reconciles the
+database diagnostic across an uncertain transport boundary. A durable runtime
+needs both. See [Audit Run Reconciliation](audit-run-reconciliation.md) for the
+state, binding, retention, and hashing contract.

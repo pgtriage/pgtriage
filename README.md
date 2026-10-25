@@ -151,7 +151,10 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO pgtriage_reader;
 ## Tools
 
 ### `full_audit`
-Run a comprehensive performance audit covering table health, slow queries, index health, and configuration. Pass the optional `schema_name` argument to scope table, plan, and index findings to one user schema; omit it to audit every non-system schema. Configuration findings remain database-wide. Returns all findings sorted by severity.
+Run a comprehensive performance audit covering table health, slow queries, index health, and configuration. Pass the optional `schema_name` argument to scope table, plan, and index findings to one user schema; omit it to audit every non-system schema. Configuration findings remain database-wide. Clients that need durable recovery should generate and persist an `audit_run_id` UUID before dispatch. Reusing the same ID and request binding returns the saved result instead of repeating diagnostic work.
+
+### `get_audit_run`
+Reconcile a known `full_audit` operation by `audit_run_id` without starting or repeating database work. Returns `NOT_FOUND`, `STARTED`, `COMPLETED`, `FAILED`, `EXPIRED`, or `CONFLICT`, with retained evidence for completed runs. The local registry keeps completed evidence for 24 hours and a minimal tombstone for seven additional days by default. Configure those windows with `PGTRIAGE_AUDIT_RETENTION_HOURS` and `PGTRIAGE_AUDIT_TOMBSTONE_HOURS`, or set `PGTRIAGE_AUDIT_STORE_PATH` to choose the registry location.
 
 ### `check_table_health`
 Analyze dead tuples, autovacuum stats, sequential scan ratios, and TOAST bloat. Optionally filter to a specific user schema and/or table.
@@ -174,8 +177,8 @@ Review PostgreSQL settings (`shared_buffers`, `work_mem`, `autovacuum_vacuum_sca
 
 [pgtriage Agent Lab](https://github.com/manas-maheshwari/pgtriage-agent-lab)
 is a runnable TypeScript reference client that demonstrates authorization,
-bounded retries, durable workflow state, and fail-closed review around this MCP
-boundary.
+bounded retries, durable workflow state, operation reconciliation, and
+fail-closed review around this MCP boundary.
 
 pgtriage publishes MCP safety annotations for every tool. All tools are marked
 read-only and non-destructive; tools that can run bounded `EXPLAIN ANALYZE` are
@@ -183,7 +186,9 @@ deliberately not marked idempotent. Agent runtimes must still allowlist,
 authorize, and validate every call because MCP annotations are descriptive
 hints, not permissions. See
 [Agent Runtime Integration](docs/agent-runtime-integration.md) for the complete
-contract, schema-scoped audit behavior, and retry guidance.
+contract, schema-scoped audit behavior, and recovery guidance. The frozen
+operation-identity contract is documented in
+[Audit Run Reconciliation](docs/audit-run-reconciliation.md).
 
 ## Resources
 

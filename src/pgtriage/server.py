@@ -21,6 +21,12 @@ from pgtriage.analyzers.patterns import (
     analyze_table_bloat,
     analyze_vacuum_staleness,
 )
+from pgtriage.audit_runs import (
+    AuditRunConflictError,
+    AuditRunStatus,
+    AuditRunStore,
+    database_target_hash,
+)
 from pgtriage.collectors.config import collect_config_settings, collect_connection_stats
 from pgtriage.collectors.index_health import (
     collect_duplicate_indexes,
@@ -54,6 +60,8 @@ READ_ONLY_DIAGNOSTIC = ToolAnnotations(
 @dataclass
 class AppContext:
     db: ConnectionManager
+    audit_runs: AuditRunStore
+    database_identity_hash: str
 
 
 @asynccontextmanager
@@ -75,10 +83,25 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
         )
 
     db = ConnectionManager(conn_string)
+    audit_runs = AuditRunStore(
+        retention_hours=_positive_env_int(
+            "PGTRIAGE_AUDIT_RETENTION_HOURS",
+            24,
+        ),
+        tombstone_hours=_positive_env_int(
+            "PGTRIAGE_AUDIT_TOMBSTONE_HOURS",
+            24 * 7,
+        ),
+    )
     try:
-        yield AppContext(db=db)
+        yield AppContext(
+            db=db,
+            audit_runs=audit_runs,
+            database_identity_hash=database_target_hash(conn_string),
+        )
     finally:
         await db.close()
+        audit_runs.close()
 
 
 mcp = FastMCP(
@@ -352,6 +375,7 @@ async def check_config() -> dict:
 async def full_audit(
     slow_query_limit: int = 10,
     schema_name: str | None = None,
+    audit_run_id: str | None = None,
 ) -> dict:
     """Run a comprehensive performance audit: table health,
     slow queries, index health, and configuration review.
@@ -361,6 +385,72 @@ async def full_audit(
     Configuration findings remain database-wide. Omitting schema_name audits
     all non-system schemas.
     """
+    ctx = mcp.get_context()
+    app = ctx.request_context.lifespan_context
+    db = app.db
+    store = app.audit_runs
+
+    postgres_server_version = await db.get_server_version()
+    try:
+        statistics_reset_at = await db.get_statistics_reset_at()
+    except psycopg.Error:
+        statistics_reset_at = None
+
+    try:
+        audit_run, created = store.claim(
+            audit_run_id=audit_run_id,
+            database_identity_hash=app.database_identity_hash,
+            schema_name=schema_name,
+            slow_query_limit=slow_query_limit,
+            postgres_server_version=postgres_server_version,
+            statistics_reset_at=statistics_reset_at,
+        )
+    except AuditRunConflictError as error:
+        raise ValueError(str(error)) from error
+
+    if not created:
+        if audit_run.status is AuditRunStatus.COMPLETED and audit_run.result:
+            return audit_run.result
+        if audit_run.status is AuditRunStatus.STARTED:
+            raise RuntimeError(
+                f"Audit run '{audit_run.audit_run_id}' is already in progress. "
+                "Use get_audit_run to reconcile it."
+            )
+        if audit_run.status is AuditRunStatus.EXPIRED:
+            raise RuntimeError(
+                f"Audit run '{audit_run.audit_run_id}' has expired. "
+                "An explicit new run ID is required."
+            )
+        raise RuntimeError(
+            f"Audit run '{audit_run.audit_run_id}' previously failed. "
+            "Use get_audit_run to inspect its bounded failure state."
+        )
+
+    try:
+        result_data = await _execute_full_audit(
+            slow_query_limit=slow_query_limit,
+            schema_name=schema_name,
+        )
+        completed = store.complete(audit_run.audit_run_id, result_data)
+        if completed.result is None:
+            raise RuntimeError("Completed audit run is missing its persisted result.")
+        return completed.result
+    except Exception as error:
+        store.fail(
+            audit_run.audit_run_id,
+            code=type(error).__name__.upper()[:100],
+            reason=(
+                "Audit execution failed before a recoverable result was recorded."
+            ),
+        )
+        raise
+
+
+async def _execute_full_audit(
+    *,
+    slow_query_limit: int,
+    schema_name: str | None,
+) -> dict:
     all_findings = []
     sections = {}
 
@@ -404,6 +494,47 @@ async def full_audit(
     result_data = result.model_dump()
     result_data["sections"] = sections
     return result_data
+
+
+@mcp.tool(annotations=READ_ONLY_IDEMPOTENT)
+async def get_audit_run(audit_run_id: str) -> dict:
+    """Retrieve durable status and evidence for a known full-audit operation.
+
+    This tool never starts or repeats database diagnostic work.
+    """
+    ctx = mcp.get_context()
+    app = ctx.request_context.lifespan_context
+    record = app.audit_runs.get(audit_run_id)
+    if record is None:
+        return {
+            "audit_run_id": audit_run_id,
+            "status": "NOT_FOUND",
+            "provenance": None,
+            "result": None,
+            "failure": None,
+        }
+    if record.database_identity_hash != app.database_identity_hash:
+        return {
+            "audit_run_id": record.audit_run_id,
+            "status": "CONFLICT",
+            "provenance": None,
+            "result": None,
+            "failure": None,
+        }
+    return record.lookup_payload()
+
+
+def _positive_env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as error:
+        raise RuntimeError(f"{name} must be a positive integer") from error
+    if value <= 0:
+        raise RuntimeError(f"{name} must be a positive integer")
+    return value
 
 
 @mcp.resource("pgtriage://status")
