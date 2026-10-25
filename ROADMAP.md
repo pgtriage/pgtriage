@@ -12,12 +12,16 @@ performance patterns, and return structured findings over MCP.
 - Schema-scoped audits and catalog-backed type-mismatch detection
 - Evidence-backed duplicate-index candidate selection with conservative
   structural equivalence, protected-index exclusions, and review-only fallbacks
+- Durable full-audit operation identity, local result retention, and read-only
+  reconciliation after ambiguous transport failures or client restarts
 - Unit, integration, pgbench, packaging, and CLI smoke tests in CI
 - PyPI and official MCP Registry publishing
 
 ## Near-term priorities
 
 - Benchmark full-audit latency and output size across larger database estates
+- Exercise reconciliation against additional MCP clients and interrupted-process
+  integration fixtures
 - Improve recommendation precision and suppress low-value duplicate findings
 - Expand real-plan fixtures for type mismatches, stale statistics, and N+1 patterns
 - Add machine-readable benchmark reports for release-to-release comparison
