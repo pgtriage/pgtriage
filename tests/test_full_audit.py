@@ -166,7 +166,11 @@ async def test_get_audit_run_hides_result_from_different_database(
         postgres_server_version="PostgreSQL 15.4",
         statistics_reset_at=None,
     )
-    store.complete(record.audit_run_id, {**EMPTY_RESULT, "sections": {}})
+    store.complete(
+        record.audit_run_id,
+        {**EMPTY_RESULT, "sections": {}},
+        claim_generation=record.claim_generation,
+    )
 
     recovered = await server.get_audit_run(audit_run_id)
 
