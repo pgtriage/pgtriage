@@ -9,7 +9,7 @@ import sqlite3
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -36,6 +36,10 @@ class AuditRunConflictError(ValueError):
     """Raised when an operation ID is reused with a different binding."""
 
 
+class AuditRunGenerationError(RuntimeError):
+    """Raised when a stale worker tries to mutate a newer audit generation."""
+
+
 @dataclass(frozen=True)
 class AuditRunRecord:
     audit_run_id: str
@@ -56,6 +60,7 @@ class AuditRunRecord:
     failure_reason: str | None
     expires_at: float
     tombstone_expires_at: float
+    claim_generation: str | None = field(default=None, repr=False, compare=False)
 
     def provenance(self) -> dict[str, Any]:
         return {
@@ -179,6 +184,7 @@ class AuditRunStore:
             """
             CREATE TABLE IF NOT EXISTS audit_runs (
                 audit_run_id TEXT PRIMARY KEY,
+                claim_generation TEXT NOT NULL,
                 binding_hash TEXT NOT NULL,
                 database_identity_hash TEXT NOT NULL,
                 schema_name TEXT,
@@ -203,6 +209,7 @@ class AuditRunStore:
                 ON audit_runs(expires_at);
             """
         )
+        self._migrate_claim_generation()
         self._db.commit()
         self._restrict_file_permissions()
 
@@ -226,21 +233,24 @@ class AuditRunStore:
         started_at = _utc_iso(now)
         expires_at = now + self.retention_seconds
         tombstone_expires_at = expires_at + self.tombstone_seconds
+        claim_generation = str(uuid4())
 
         with self._lock, self._db:
             self._cleanup_locked(now)
             inserted = self._db.execute(
                 """
                 INSERT OR IGNORE INTO audit_runs (
-                    audit_run_id, binding_hash, database_identity_hash,
+                    audit_run_id, claim_generation, binding_hash,
+                    database_identity_hash,
                     schema_name, slow_query_limit, status, started_at,
                     package_version, detector_contract_version,
                     postgres_server_version, statistics_reset_at,
                     expires_at, tombstone_expires_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     normalized_id,
+                    claim_generation,
                     binding_hash,
                     database_identity_hash,
                     schema_name,
@@ -260,15 +270,25 @@ class AuditRunStore:
                 (normalized_id,),
             ).fetchone()
             assert row is not None
-            record = self._record(row)
+            created = inserted.rowcount == 1
+            record = self._record(
+                row,
+                claim_generation=(claim_generation if created else None),
+            )
             if record.binding_hash != binding_hash:
                 raise AuditRunConflictError(
                     "audit_run_id is already bound to a different database, "
                     "schema, or request"
                 )
-            return record, inserted.rowcount == 1
+            return record, created
 
-    def complete(self, audit_run_id: str, result: dict[str, Any]) -> AuditRunRecord:
+    def complete(
+        self,
+        audit_run_id: str,
+        result: dict[str, Any],
+        *,
+        claim_generation: str,
+    ) -> AuditRunRecord:
         evidence = {
             "findings": result.get("findings", []),
             "summary": result.get("summary", {}),
@@ -281,7 +301,13 @@ class AuditRunStore:
         tombstone_expires_at = expires_at + self.tombstone_seconds
 
         with self._lock, self._db:
-            current = self._required_record(audit_run_id)
+            row = self._required_row(audit_run_id)
+            if row["claim_generation"] != claim_generation:
+                raise AuditRunGenerationError(
+                    "Audit run generation is no longer current; refusing stale "
+                    "complete."
+                )
+            current = self._record(row)
             if current.status is not AuditRunStatus.STARTED:
                 raise RuntimeError(
                     f"Cannot complete audit run in state {current.status.value}."
@@ -293,12 +319,12 @@ class AuditRunStore:
                 "evidence_hash": evidence_hash,
             }
             stored_result = {**result, "provenance": provenance}
-            self._db.execute(
+            cursor = self._db.execute(
                 """
                 UPDATE audit_runs
                 SET status = ?, completed_at = ?, evidence_hash = ?,
                     result_json = ?, expires_at = ?, tombstone_expires_at = ?
-                WHERE audit_run_id = ? AND status = ?
+                WHERE audit_run_id = ? AND claim_generation = ? AND status = ?
                 """,
                 (
                     AuditRunStatus.COMPLETED.value,
@@ -308,29 +334,35 @@ class AuditRunStore:
                     expires_at,
                     tombstone_expires_at,
                     current.audit_run_id,
+                    claim_generation,
                     AuditRunStatus.STARTED.value,
                 ),
             )
+            if cursor.rowcount != 1:
+                self._raise_generation_or_state_error(
+                    current.audit_run_id,
+                    claim_generation,
+                    action="complete",
+                )
             return self._required_record(current.audit_run_id)
 
     def fail(
         self,
         audit_run_id: str,
         *,
+        claim_generation: str,
         code: str,
         reason: str,
     ) -> AuditRunRecord:
         now = self._clock()
         with self._lock, self._db:
-            current = self._required_record(audit_run_id)
-            if current.status is not AuditRunStatus.STARTED:
-                return current
-            self._db.execute(
+            normalized_id = normalize_audit_run_id(audit_run_id)
+            cursor = self._db.execute(
                 """
                 UPDATE audit_runs
                 SET status = ?, completed_at = ?, failure_code = ?,
                     failure_reason = ?, expires_at = ?, tombstone_expires_at = ?
-                WHERE audit_run_id = ? AND status = ?
+                WHERE audit_run_id = ? AND claim_generation = ? AND status = ?
                 """,
                 (
                     AuditRunStatus.FAILED.value,
@@ -339,11 +371,21 @@ class AuditRunStore:
                     reason[:500],
                     now + self.retention_seconds,
                     now + self.retention_seconds + self.tombstone_seconds,
-                    current.audit_run_id,
+                    normalized_id,
+                    claim_generation,
                     AuditRunStatus.STARTED.value,
                 ),
             )
-            return self._required_record(current.audit_run_id)
+            if cursor.rowcount != 1:
+                current = self._raise_generation_or_state_error(
+                    normalized_id,
+                    claim_generation,
+                    action="fail",
+                    return_same_generation=True,
+                )
+                assert current is not None
+                return current
+            return self._required_record(normalized_id)
 
     def get(self, audit_run_id: str) -> AuditRunRecord | None:
         normalized_id = normalize_audit_run_id(audit_run_id)
@@ -369,13 +411,16 @@ class AuditRunStore:
             self._db.close()
 
     def _required_record(self, audit_run_id: str) -> AuditRunRecord:
+        return self._record(self._required_row(audit_run_id))
+
+    def _required_row(self, audit_run_id: str) -> sqlite3.Row:
         row = self._db.execute(
             "SELECT * FROM audit_runs WHERE audit_run_id = ?",
             (normalize_audit_run_id(audit_run_id),),
         ).fetchone()
         if row is None:
             raise KeyError(f"Unknown audit run: {audit_run_id}")
-        return self._record(row)
+        return row
 
     def _cleanup_locked(self, now: float) -> None:
         self._db.execute(
@@ -398,7 +443,12 @@ class AuditRunStore:
             (AuditRunStatus.EXPIRED.value, now),
         )
 
-    def _record(self, row: sqlite3.Row) -> AuditRunRecord:
+    def _record(
+        self,
+        row: sqlite3.Row,
+        *,
+        claim_generation: str | None = None,
+    ) -> AuditRunRecord:
         result_json = row["result_json"]
         return AuditRunRecord(
             audit_run_id=row["audit_run_id"],
@@ -419,6 +469,56 @@ class AuditRunStore:
             failure_reason=row["failure_reason"],
             expires_at=row["expires_at"],
             tombstone_expires_at=row["tombstone_expires_at"],
+            claim_generation=claim_generation,
+        )
+
+    def _raise_generation_or_state_error(
+        self,
+        audit_run_id: str,
+        claim_generation: str,
+        *,
+        action: str,
+        return_same_generation: bool = False,
+    ) -> AuditRunRecord | None:
+        row = self._db.execute(
+            "SELECT * FROM audit_runs WHERE audit_run_id = ?",
+            (audit_run_id,),
+        ).fetchone()
+        if row is None or row["claim_generation"] != claim_generation:
+            raise AuditRunGenerationError(
+                "Audit run generation is no longer current; refusing stale "
+                f"{action}."
+            )
+        current = self._record(row)
+        if return_same_generation:
+            return current
+        raise RuntimeError(
+            f"Cannot {action} audit run in state {current.status.value}."
+        )
+
+    def _migrate_claim_generation(self) -> None:
+        columns = {
+            row["name"]
+            for row in self._db.execute("PRAGMA table_info(audit_runs)").fetchall()
+        }
+        if "claim_generation" not in columns:
+            self._db.execute(
+                "ALTER TABLE audit_runs ADD COLUMN claim_generation TEXT"
+            )
+        rows = self._db.execute(
+            """
+            SELECT audit_run_id FROM audit_runs
+            WHERE claim_generation IS NULL OR claim_generation = ''
+            """
+        ).fetchall()
+        self._db.executemany(
+            """
+            UPDATE audit_runs SET claim_generation = ?
+            WHERE audit_run_id = ? AND (
+                claim_generation IS NULL OR claim_generation = ''
+            )
+            """,
+            [(str(uuid4()), row["audit_run_id"]) for row in rows],
         )
 
     def _prepare_path(self) -> None:
