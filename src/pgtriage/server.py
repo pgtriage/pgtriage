@@ -23,6 +23,7 @@ from pgtriage.analyzers.patterns import (
 )
 from pgtriage.audit_runs import (
     AuditRunConflictError,
+    AuditRunGenerationError,
     AuditRunStatus,
     AuditRunStore,
     database_target_hash,
@@ -425,19 +426,29 @@ async def full_audit(
             f"Audit run '{audit_run.audit_run_id}' previously failed. "
             "Use get_audit_run to inspect its bounded failure state."
         )
+    if audit_run.claim_generation is None:
+        raise RuntimeError("New audit run is missing its internal claim generation.")
+    claim_generation = audit_run.claim_generation
 
     try:
         result_data = await _execute_full_audit(
             slow_query_limit=slow_query_limit,
             schema_name=schema_name,
         )
-        completed = store.complete(audit_run.audit_run_id, result_data)
+        completed = store.complete(
+            audit_run.audit_run_id,
+            result_data,
+            claim_generation=claim_generation,
+        )
         if completed.result is None:
             raise RuntimeError("Completed audit run is missing its persisted result.")
         return completed.result
+    except AuditRunGenerationError:
+        raise
     except Exception as error:
         store.fail(
             audit_run.audit_run_id,
+            claim_generation=claim_generation,
             code=type(error).__name__.upper()[:100],
             reason=(
                 "Audit execution failed before a recoverable result was recorded."

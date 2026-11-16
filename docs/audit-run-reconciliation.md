@@ -36,6 +36,7 @@ permissions.
 The registry contains only the minimum payload required for reconciliation:
 
 - audit run ID, binding digests, and normalized schema scope;
+- an internal opaque claim-generation token that is never returned through MCP;
 - terminal or in-progress status and bounded failure information;
 - start and completion timestamps;
 - pgtriage package version and detector-contract version;
@@ -79,6 +80,19 @@ The registry uses these states:
 Creating a run and claiming an existing run are atomic. A repeated request with
 the same ID and binding returns the existing state. It never starts another
 audit. A repeated request with a conflicting binding fails closed.
+
+Every newly admitted run also receives an internal claim-generation token. Only
+the worker that created that generation receives the token. Completion and
+failure updates require the operation ID, matching generation, and `STARTED`
+state. This prevents a worker from an expired generation from attaching its
+result or failure to a newer run that later reused the same ID. The token is a
+registry-integrity fence; it does not cancel a stale worker or prevent that
+worker from consuming database resources before its terminal update is rejected.
+
+The registry adds and backfills this column when opening a pre-token database.
+Do not run pre-token and token-aware pgtriage processes concurrently against the
+same registry during an upgrade: an older process cannot present or enforce the
+new generation fence. Stop the old process before starting the upgraded one.
 
 A `STARTED` record that outlives the configured retention window becomes an
 `EXPIRED` tombstone. This prevents a server crash from leaving an operation
